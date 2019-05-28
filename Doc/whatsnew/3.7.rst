@@ -1215,6 +1215,9 @@ This allows for guaranteeing
 files when they are created eagerly. (Contributed by Bernhard M. Wiedemann
 in :issue:`29708`.)
 
+:func:`py_compile.compile` now supports silent mode.
+(Contributed by Joannah Nanjekye in :issue:`22640`.)
+
 
 pydoc
 -----
