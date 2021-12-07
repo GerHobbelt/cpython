@@ -2327,7 +2327,7 @@ called::
    from inspect import isclass
 
    def subscribe(obj, x):
-       """Return the result of the expression `obj[x]`"""
+       """Return the result of the expression 'obj[x]'"""
 
        class_of_obj = type(obj)
 
