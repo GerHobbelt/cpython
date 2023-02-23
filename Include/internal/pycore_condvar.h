@@ -37,7 +37,7 @@
 #define Py_HAVE_CONDVAR
 
 /* include windows if it hasn't been done before */
-#define WIN32_LEAN_AND_MEAN
+//#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 /* options */
