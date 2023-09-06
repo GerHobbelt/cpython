@@ -1,3 +1,15 @@
+.. date: 2023-09-11-20-07-52
+.. gh-issue:102988 
+.. nonce: GLWDMX
+.. release date: 2023-09-11
+.. section: Security
+
+email.utils.getaddresses and email.utils.parseaddr now return
+``('', '')`` 2-tuples in more situations where invalid email addresses are
+encountered instead of potentially inaccurate values.
+(Contributed by Thomas Dwyer for :gh:`102988` to ameliorate CVE-2023-27043.)
+
+..
 .. date: 2023-06-05-04-07-52
 .. gh-issue: 103142
 .. nonce: GLWDMX
