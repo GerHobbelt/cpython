@@ -900,15 +900,6 @@ therefore included in source distributions.
 (Contributed by Ryan Gonzalez in :issue:`11913`.)
 
 
-email
------
-
-* :func:`email.utils.getaddresses` and :func:`email.utils.parseaddr` now return
-  ``('', '')`` 2-tuples in more situations where invalid email addresses are
-  encountered instead of potentially inaccurate values.
-  (Contributed by Thomas Dwyer for :gh:`102988` to ameliorate CVE-2023-27043.)
-
-
 enum
 ----
 
@@ -2647,12 +2638,6 @@ from the URL. This is a mitigation for `CVE-2023-24329
 
 Notable security feature in 3.7.17.2
 ==================================
-
-email.utils.getaddresses and email.utils.parseaddr now return
-``('', '')`` 2-tuples in more situations where invalid email addresses are
-encountered instead of potentially inaccurate values.
-(Contributed by Thomas Dwyer for :gh:`102988` to ameliorate CVE-2023-27043.)
-
 
 Fixed an issue where instances of :class:`ssl.SSLSocket` were vulnerable to
 a bypass of the TLS handshake and included protections (like certificate
