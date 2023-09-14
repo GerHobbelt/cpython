@@ -89,7 +89,7 @@ byte-code cache files in the directory containing the source code.
       overrides the value of the *invalidation_mode* argument, and determines
       its default value instead.
 
-   .. versionchanged:: 3.8
+   .. versionchanged:: 3.7.17
       The *quiet* parameter was added.
 
 
