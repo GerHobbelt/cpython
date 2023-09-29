@@ -843,5 +843,3 @@ class TemporaryDirectory:
     def cleanup(self):
         if self._finalizer.detach() or _os.path.exists(self.name):
             self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
-
-    __class_getitem__ = classmethod(_types.GenericAlias)
