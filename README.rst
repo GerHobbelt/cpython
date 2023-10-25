@@ -1,4 +1,4 @@
-This is Python version 3.12.0 alpha 3
+This is Python version 3.12.0 alpha 4
 =====================================
 
 .. image:: https://github.com/python/cpython/workflows/Tests/badge.svg
@@ -245,7 +245,7 @@ Copyright and License Information
 ---------------------------------
 
 
-Copyright © 2001-2022 Python Software Foundation.  All rights reserved.
+Copyright © 2001-2023 Python Software Foundation.  All rights reserved.
 
 Copyright © 2000 BeOpen.com.  All rights reserved.
 

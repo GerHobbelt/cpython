@@ -1466,8 +1466,12 @@ regen-cases:
 		-o $(srcdir)/Python/opcode_metadata.h.new
 	$(UPDATE_FILE) $(srcdir)/Python/opcode_metadata.h $(srcdir)/Python/opcode_metadata.h.new
 
-Python/ceval.o: $(srcdir)/Python/opcode_targets.h $(srcdir)/Python/condvar.h $(srcdir)/Python/generated_cases.c.h
-
+Python/ceval.o: \
+		$(srcdir)/Python/ceval_macros.h \
+		$(srcdir)/Python/condvar.h \
+		$(srcdir)/Python/generated_cases.c.h \
+		$(srcdir)/Python/opcode_metadata.h \
+		$(srcdir)/Python/opcode_targets.h
 
 Python/frozen.o: $(FROZEN_FILES_OUT)
 
@@ -1648,6 +1652,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/internal/pycore_fileutils.h \
 		$(srcdir)/Include/internal/pycore_floatobject.h \
 		$(srcdir)/Include/internal/pycore_format.h \
+		$(srcdir)/Include/internal/pycore_frame.h \
 		$(srcdir)/Include/internal/pycore_function.h \
 		$(srcdir)/Include/internal/pycore_genobject.h \
 		$(srcdir)/Include/internal/pycore_getopt.h \
