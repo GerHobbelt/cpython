@@ -41,6 +41,7 @@ import warnings as _warnings
 import io as _io
 import os as _os
 import shutil as _shutil
+import stat as _stat
 import errno as _errno
 from random import Random as _Random
 import sys as _sys
@@ -802,7 +803,7 @@ class TemporaryDirectory(object):
             warn_message="Implicitly cleaning up {!r}".format(self))
 
     @classmethod
-    def _rmtree(cls, name):
+    def _rmtree(cls, name, ignore_errors=False):
         def onerror(func, path, exc_info):
             if issubclass(exc_info[0], PermissionError):
                 try:
@@ -812,15 +813,39 @@ class TemporaryDirectory(object):
 
                     try:
                         _os.unlink(path)
-                    # PermissionError is raised on FreeBSD for directories
-                    except (IsADirectoryError, PermissionError):
-                        cls._rmtree(path)
+                    except IsADirectoryError:
+                        cls._rmtree(path, ignore_errors=ignore_errors)
+                    except PermissionError:
+                        # The PermissionError handler was originally added for
+                        # FreeBSD in directories, but it seems that it is raised
+                        # on Windows too.
+                        # bpo-43153: Calling _rmtree again may
+                        # raise NotADirectoryError and mask the PermissionError.
+                        # So we must re-raise the current PermissionError if
+                        # path is not a directory.
+                        try:
+                            st = _os.lstat(path)
+                        except OSError:
+                            if ignore_errors:
+                                return
+                            raise
+                        if (_stat.S_ISLNK(st.st_mode) or
+                            not _stat.S_ISDIR(st.st_mode) or
+                            (hasattr(st, 'st_file_attributes') and
+                             st.st_file_attributes & _stat.FILE_ATTRIBUTE_REPARSE_POINT and
+                             st.st_reparse_tag == _stat.IO_REPARSE_TAG_MOUNT_POINT)
+                        ):
+                            if ignore_errors:
+                                return
+                            raise
+                        cls._rmtree(path, ignore_errors=ignore_errors)
                 except FileNotFoundError:
                     pass
             elif issubclass(exc_info[0], FileNotFoundError):
                 pass
             else:
-                raise
+                if not ignore_errors:
+                    raise
 
         _shutil.rmtree(name, onerror=onerror)
 
