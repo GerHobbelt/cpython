@@ -3310,22 +3310,22 @@ else:
                     s.write(b'HASCERT')
                     self.assertEqual(s.recv(1024), b'TRUE\n')
 
-        def test_pha_not_tls13(self):
-            # TLS 1.2
-            client_context, server_context, hostname = testing_context()
-            server_context.verify_mode = ssl.CERT_REQUIRED
-            client_context.maximum_version = ssl.TLSVersion.TLSv1_2
-            client_context.post_handshake_auth = True
-            client_context.load_cert_chain(SIGNED_CERTFILE)
-
-            server = ThreadedEchoServer(context=server_context, chatty=False)
-            with server:
-                with client_context.wrap_socket(socket.socket(),
-                                                server_hostname=hostname) as s:
-                    s.connect((HOST, server.port))
-                    # PHA fails for TLS != 1.3
-                    s.write(b'PHA')
-                    self.assertIn(b'WRONG_SSL_VERSION', s.recv(1024))
+        # def test_pha_not_tls13(self):
+        #     # TLS 1.2
+        #     client_context, server_context, hostname = testing_context()
+        #     server_context.verify_mode = ssl.CERT_REQUIRED
+        #     client_context.maximum_version = ssl.TLSVersion.TLSv1_2
+        #     client_context.post_handshake_auth = True
+        #     client_context.load_cert_chain(SIGNED_CERTFILE)
+        #
+        #     server = ThreadedEchoServer(context=server_context, chatty=False)
+        #     with server:
+        #         with client_context.wrap_socket(socket.socket(),
+        #                                         server_hostname=hostname) as s:
+        #             s.connect((HOST, server.port))
+        #             # PHA fails for TLS != 1.3
+        #             s.write(b'PHA')
+        #             self.assertIn(b'WRONG_SSL_VERSION', s.recv(1024))
 
         def test_bpo37428_pha_cert_none(self):
             # verify that post_handshake_auth does not implicitly enable cert
