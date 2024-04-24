@@ -2650,3 +2650,11 @@ post-handshake TLS encrypted data.  Security issue reported as
 <https://cve.mitre.org/cgi-bin/cvename.cgi?name=CVE-2023-40217>`_ by Aapo
 Oksman. Patch by Gregory P. Smith.
 
+Notable changes in 3.7.17.4
+=========================
+
+ipaddress
+---------
+
+* Fixed ``is_global`` and ``is_private`` behavior in ``IPv4Address``,
+  ``IPv6Address``, ``IPv4Network`` and ``IPv6Network``.
