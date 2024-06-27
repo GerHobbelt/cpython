@@ -1,3 +1,24 @@
+.. bpo: none
+.. date: 2024-06-26
+.. nonce:
+.. release date: 2024-06-26
+.. section: Core and Builtins
+
+Include vcruntime140.dll in Python 2.7
+
+vcruntime140.dll is now included as it is a necessary runtime dependency of Python.
+Similar to bpo: 39930
+
+.. bpo: none
+.. date: 2024-06-26
+.. nonce:
+.. release date: 2024-06-26
+.. section: Core and Builtins
+
+WSA Errors are handled on Windows
+
+We are now handling WSAE* errors on windows. These Errors were not being handled properly since updating to newer versions of MSVC.
+
 .. bpo: 32056
 .. date: 2018-03-18
 .. nonce: 
