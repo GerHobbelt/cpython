@@ -169,12 +169,13 @@ foreach (System.Diagnostics.Process p in System.Diagnostics.Process.GetProcesses
       <VCRedistDir Condition="$(Platform) == 'Win32'">$(VCRedistDir)x86\</VCRedistDir>
       <VCRedistDir Condition="$(Platform) != 'Win32'">$(VCRedistDir)$(Platform)\</VCRedistDir>
     </PropertyGroup>
-
     <ItemGroup Condition="$(VCInstallDir) != ''">
       <VCRuntimeDLL Include="$(VCRedistDir)\Microsoft.VC*.CRT\vcruntime*.dll" />
+      <VCRuntimeDLL Include="$(VCRedistDir)\Microsoft.VC*.CRT\msvcp*0.dll" />
+      <VCRuntimeDLL Include="$(VCRedistDir)\Microsoft.VC*.CRT\msvcp*0_1.dll" />
+      <VCRuntimeDLL Include="$(VCRedistDir)\Microsoft.VC*.CRT\concrt*.dll" />
     </ItemGroup>
-
-    <Error Text="vcruntime14*.dll not found under $(VCInstallDir)" Condition="@(VCRuntimeDLL) == ''" />
+    <Error Text="vcruntime*.dll, msvcp*.dll, or concrt*.dll not found under $(VCInstallDir)" Condition="@(VCRuntimeDLL) == ''" />
     <Message Text="VCRuntimeDLL: @(VCRuntimeDLL)" Importance="high" />
   </Target>
 </Project>
