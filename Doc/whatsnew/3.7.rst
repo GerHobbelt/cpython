@@ -2656,5 +2656,10 @@ Notable changes in 3.7.17.4
 ipaddress
 ---------
 
-* Fixed ``is_global`` and ``is_private`` behavior in ``IPv4Address``,
+* Fixed CVE-2024-4032 ``is_global`` and ``is_private`` behavior in ``IPv4Address``,
   ``IPv6Address``, ``IPv4Network`` and ``IPv6Network``.
+
+cert-store
+---------
+
+* Fixed CVE-2024-0397 Fix locking in ``cert_store_stats`` and ``get_ca_certs``
