@@ -323,9 +323,13 @@ def _quote(str, LegalChars=_LegalChars,
         return '"' + _nulljoin( map(_Translator.get, str, str) ) + '"'
 # end _quote
 
+_unquote_sub = re.compile(r'\\(?:([0-3][0-7][0-7])|(.))').sub
 
-_OctalPatt = re.compile(r"\\[0-3][0-7][0-7]")
-_QuotePatt = re.compile(r"[\\].")
+def _unquote_replace(m):
+    if m.group(1):
+        return chr(int(m.group(1), 8))
+    else:
+        return m.group(2)
 
 def _unquote(str):
     # If there aren't any doublequotes,
@@ -345,28 +349,7 @@ def _unquote(str):
     #    \012 --> \n
     #    \"   --> "
     #
-    i = 0
-    n = len(str)
-    res = []
-    while 0 <= i < n:
-        Omatch = _OctalPatt.search(str, i)
-        Qmatch = _QuotePatt.search(str, i)
-        if not Omatch and not Qmatch:              # Neither matched
-            res.append(str[i:])
-            break
-        # else:
-        j = k = -1
-        if Omatch: j = Omatch.start(0)
-        if Qmatch: k = Qmatch.start(0)
-        if Qmatch and ( not Omatch or k < j ):     # QuotePatt matched
-            res.append(str[i:k])
-            res.append(str[k+1])
-            i = k+2
-        else:                                      # OctalPatt matched
-            res.append(str[i:j])
-            res.append( chr( int(str[j+1:j+4], 8) ) )
-            i = j+4
-    return _nulljoin(res)
+    return _unquote_sub(_unquote_replace, str)
 # end _unquote
 
 # The _getdate() routine is used to set the expiration time in

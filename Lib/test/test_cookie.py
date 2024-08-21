@@ -1,6 +1,7 @@
 # Simple test suite for Cookie.py
 
 from test.test_support import run_unittest, run_doctest, check_warnings
+from test import support
 import unittest
 import Cookie
 import pickle
@@ -155,6 +156,44 @@ class CookieTests(unittest.TestCase):
             C.load(s)
             self.assertEqual(dict(C), {})
             self.assertEqual(C.output(), '')
+
+    def test_unquote(self):
+        cases = [
+            (r'a="b=\""', 'b="'),
+            (r'a="b=\\"', 'b=\\'),
+            (r'a="b=\="', 'b=='),
+            (r'a="b=\n"', 'b=n'),
+            (r'a="b=\042"', 'b="'),
+            (r'a="b=\134"', 'b=\\'),
+            (r'a="b=\377"', 'b=\xff'),
+            (r'a="b=\400"', 'b=400'),
+            (r'a="b=\42"', 'b=42'),
+            (r'a="b=\\042"', 'b=\\042'),
+            (r'a="b=\\134"', 'b=\\134'),
+            (r'a="b=\\\""', 'b=\\"'),
+            (r'a="b=\\\042"', 'b=\\"'),
+            (r'a="b=\134\""', 'b=\\"'),
+            (r'a="b=\134\042"', 'b=\\"'),
+        ]
+        for encoded, decoded in cases:
+            # with self.subTest(encoded):
+            C = Cookie.SimpleCookie()
+            C.load(encoded)
+            self.assertEqual(C['a'].value, decoded)
+
+    @support.requires_resource('cpu')
+    def test_unquote_large(self):
+        n = 10**6
+        for encoded in r'\\', r'\134':
+            # with self.subTest(encoded):
+            data = 'a="b=' + encoded*n + ';"'
+            C = Cookie.SimpleCookie()
+            C.load(data)
+            value = C['a'].value
+            self.assertEqual(value[:3], 'b=\\')
+            self.assertEqual(value[-2:], '\\;')
+            self.assertEqual(len(value), n + 3)
+
 
     def test_pickle(self):
         rawdata = 'Customer="WILE_E_COYOTE"; Path=/acme; Version=1'
