@@ -41,3 +41,13 @@ CVE-2024-0397 Fix locking in cert_store_stats and get_ca_certs
 :meth:`ssl.SSLContext.get_ca_certs` now correctly lock access to the
 certificate store, when the :class:`ssl.SSLContext` is shared across
 multiple threads.
+
+.. gh: 123067
+.. date: 2024-08-22
+.. nonce:
+.. release date: 2024-08-22
+.. section: Core and Builtins
+
+CVE-2024-7592 Fix quadratic complexity in parsing quoted cookie
+
+Fix quadratic complexity in parsing ``"``-quoted cookie values with backslashes by :mod:`http.cookies`.
