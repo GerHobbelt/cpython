@@ -14,7 +14,7 @@ rem If updating tcl/tk/tix you must also update their versions/directories in tc
 set libraries=
 set libraries=%libraries%                                    bzip2-1.0.8
 if NOT "%IncludeBsddb%"=="false" set libraries=%libraries%   bsddb-4.7.25.0
-set libraries=%libraries%                                    sqlite-3.43.0.0
+set libraries=%libraries%                                    sqlite-3.46.1.0
 if NOT "%IncludeTkinter%"=="false" set libraries=%libraries% tcl-8.5.19.0
 if NOT "%IncludeTkinter%"=="false" set libraries=%libraries% tk-8.5.19.0
 if NOT "%IncludeTkinter%"=="false" set libraries=%libraries% tix-8.4.3.5
