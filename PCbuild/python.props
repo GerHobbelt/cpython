@@ -40,6 +40,11 @@
     <opensslLibDir>$(Local_Lib)lib</opensslLibDir>
     <opensslIncludeDir>$(Local_Lib)include</opensslIncludeDir>
     <nasmDir>$(ExternalsDir)\nasm-2.11.06\</nasmDir>
+    <zlibDir>$(ZLIB_DIR)</zlibDir>
+    <zlibDir Condition="$(zlibDir) == ''">$(ExternalsDir)\zlib-1.3.1\</zlibDir>
+    <zlibDir Condition="!HasTrailingSlash($(zlibDir))">$(zlibDir)\</zlibDir>
+    <zlibIncludeDir>$(zlibDir)include</zlibIncludeDir>
+    <zlibLibDir>$(zlibDir)lib</zlibLibDir>
 
     <!-- Suffix for all binaries when building for debug -->
     <PyDebugExt Condition="'$(PyDebugExt)' == '' and $(Configuration) == 'Debug'">_d</PyDebugExt>

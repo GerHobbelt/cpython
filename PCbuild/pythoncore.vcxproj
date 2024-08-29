@@ -69,7 +69,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <AdditionalOptions>/Zm200  %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(PySourcePath)Python;$(PySourcePath)Modules\zlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(PySourcePath)Python;$(zlibIncludeDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_USRDLL;Py_BUILD_CORE;Py_ENABLE_SHARED;_CRT_SECURE_NO_WARNINGS;MS_DLL_ID="$(SysWinVer)";%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
@@ -170,17 +170,17 @@
     <ClInclude Include="..\Modules\_math.h" />
     <ClInclude Include="..\Modules\md5.h" />
     <ClInclude Include="..\Modules\rotatingtree.h" />
-    <ClInclude Include="..\Modules\zlib\crc32.h" />
-    <ClInclude Include="..\Modules\zlib\deflate.h" />
-    <ClInclude Include="..\Modules\zlib\inffast.h" />
-    <ClInclude Include="..\Modules\zlib\inffixed.h" />
-    <ClInclude Include="..\Modules\zlib\inflate.h" />
-    <ClInclude Include="..\Modules\zlib\inftrees.h" />
-    <ClInclude Include="..\Modules\zlib\trees.h" />
-    <ClInclude Include="..\Modules\zlib\zconf.h" />
-    <ClInclude Include="..\Modules\zlib\zconf.in.h" />
-    <ClInclude Include="..\Modules\zlib\zlib.h" />
-    <ClInclude Include="..\Modules\zlib\zutil.h" />
+    <ClInclude Include="$(zlibIncludeDir)\crc32.h" />
+    <ClInclude Include="$(zlibIncludeDir)\deflate.h" />
+    <ClInclude Include="$(zlibIncludeDir)\inffast.h" />
+    <ClInclude Include="$(zlibIncludeDir)\inffixed.h" />
+    <ClInclude Include="$(zlibIncludeDir)\inflate.h" />
+    <ClInclude Include="$(zlibIncludeDir)\inftrees.h" />
+    <ClInclude Include="$(zlibIncludeDir)\trees.h" />
+    <ClInclude Include="$(zlibIncludeDir)\zconf.h" />
+    <ClInclude Include="$(zlibIncludeDir)\zconf.in.h" />
+    <ClInclude Include="$(zlibIncludeDir)\zlib.h" />
+    <ClInclude Include="$(zlibIncludeDir)\zutil.h" />
     <ClInclude Include="..\Modules\cjkcodecs\alg_jisx0201.h" />
     <ClInclude Include="..\Modules\cjkcodecs\cjkcodecs.h" />
     <ClInclude Include="..\Modules\cjkcodecs\emu_jisx0213_2000.h" />
