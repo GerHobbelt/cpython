@@ -33,7 +33,7 @@
     <!-- Directories of external projects. tcltk is handled in tcltk.props -->
     <ExternalsDir>$([System.IO.Path]::GetFullPath(`$(PySourcePath)externals\`))</ExternalsDir>
     <Local_Lib>$(PySourcePath)\..\local-lib\</Local_Lib>
-    <sqlite3Dir>$(ExternalsDir)sqlite-3.46.0.0\</sqlite3Dir>
+    <sqlite3Dir>$(ExternalsDir)sqlite-3.46.1.0\</sqlite3Dir>
     <bz2Dir>$(ExternalsDir)bzip2-1.0.8\</bz2Dir>
     <bsddbDir>$(ExternalsDir)bsddb-4.7.25.0</bsddbDir>
     <opensslDir>$(Local_Lib)bin</opensslDir>
