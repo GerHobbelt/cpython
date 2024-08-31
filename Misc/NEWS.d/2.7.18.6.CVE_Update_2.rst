@@ -1,0 +1,15 @@
+.. bpo: ?
+.. date: 2024-08-30
+.. nonce: 
+.. release date: 2024-08-30
+.. section: Core and Builtins
+
+This is the release of ActivePython 2.7.18.6 CVE Update 2. 
+The continuing maintenance of 2.7.18.6 legacy.
+
+* Update ActiveState Branding
+* Update to Sqlite3 3.46.1.0 - use vendored source
+* Update to support OpenSSL 1.1.1w - use our OpenSSL
+* Update to support Zlib 1.3.1 - use our Zlib
+* Allow the version tuple to return 3 values instead of the 4 we are publishing 
+  - this is to add compatibility with modules expecting only 3.
