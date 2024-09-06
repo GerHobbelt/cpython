@@ -36,7 +36,7 @@ TCLTK_PYDS_ONLY = FileStemSet("tcl*", "tk*", "_tkinter")
 TCLTK_DIRS_ONLY = FileNameSet("tkinter", "turtledemo")
 TCLTK_FILES_ONLY = FileNameSet("turtle.py")
 
-EXCLUDE_FROM_PYDS = FileStemSet("python*", "pyshellext")
+EXCLUDE_FROM_PYDS = FileStemSet("python*", "pyshellext", "vcruntime*")
 EXCLUDE_FROM_LIB = FileNameSet("*.pyc", "__pycache__", "*.pickle")
 EXCLUDE_FROM_PACKAGED_LIB = FileNameSet("readme.txt")
 EXCLUDE_FROM_COMPILE = FileNameSet("badsyntax_*", "bad_*")
@@ -142,6 +142,14 @@ def get_layout(ns):
     for item in in_build(PYTHON_DLL_NAME):
         yield item
 
+    # Explicitly move vcruntime.dlls to the Main directory so they are available at startup
+    found_any = False
+    for dest, src in rglob(ns.build, "vcruntime*.dll"):
+        found_any = True
+        yield dest, src
+    if not found_any:
+        log_error("Failed to locate vcruntime DLL in the build.")
+
     yield "LICENSE", "LICENSE"
 
     for dest, src in rglob(ns.build, ("*.pyd", "*.dll")):
@@ -153,7 +161,9 @@ def get_layout(ns):
             continue
         if src in TCLTK_PYDS_ONLY and not ns.include_tcltk:
             continue
-
+        # Explicitly remove files containing vcruntime from the DLLs subdirectory.
+        if "vcruntime" in src:
+            continue
         for item in in_build(os.path.basename(src), dest="" if ns.flat_dlls else "DLLs/"):
             yield item
 
