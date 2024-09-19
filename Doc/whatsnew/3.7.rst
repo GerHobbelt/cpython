@@ -2663,3 +2663,11 @@ cert-store
 ---------
 
 * Fixed CVE-2024-0397 Fix locking in ``cert_store_stats`` and ``get_ca_certs``
+
+Notable changes in 3.7.17.5
+=========================
+
+pyexpat / libexpat
+------------------
+
+* Upgrade bundled libexpat to 2.6.3 to fix CVE-2024-28757, CVE-2024-45490, CVE-2024-45491 and CVE-2024-45492.
