@@ -29,10 +29,10 @@ end
 # unset irrelevant variables
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV "__VENV_DIR__"
+set -gx VIRTUAL_ENV __VENV_DIR__
 
 set -gx _OLD_VIRTUAL_PATH $PATH
-set -gx PATH "$VIRTUAL_ENV/__VENV_BIN_NAME__" $PATH
+set -gx PATH "$VIRTUAL_ENV/"__VENV_BIN_NAME__ $PATH
 
 # unset PYTHONHOME if set
 if set -q PYTHONHOME
@@ -51,20 +51,8 @@ if test -z "$VIRTUAL_ENV_DISABLE_PROMPT"
         # Save the return status of the last command
         set -l old_status $status
 
-        # Prompt override?
-        if test -n "__VENV_PROMPT__"
-            printf "%s%s" "__VENV_PROMPT__" (set_color normal)
-        else
-            # ...Otherwise, prepend env
-            set -l _checkbase (basename "$VIRTUAL_ENV")
-            if test $_checkbase = "__"
-                # special case for Aspen magic directories
-                # see https://aspen.io/
-                printf "%s[%s]%s " (set_color -b blue white) (basename (dirname "$VIRTUAL_ENV")) (set_color normal)
-            else
-                printf "%s(%s)%s" (set_color -b blue white) (basename "$VIRTUAL_ENV") (set_color normal)
-            end
-        end
+        # Output the venv prompt; color taken from the blue of the Python logo.
+        printf "%s%s%s" (set_color 4B8BBE) __VENV_PROMPT__ (set_color normal)
 
         # Restore the return status of the previous command.
         echo "exit $old_status" | .
