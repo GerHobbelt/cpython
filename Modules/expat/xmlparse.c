@@ -281,7 +281,7 @@ typedef struct binding {
 typedef struct prefix {
   const XML_Char *name;
   BINDING *binding;
-} FPREFIX;
+} PPREFIX;
 
 typedef struct {
   const XML_Char *str;
@@ -360,7 +360,7 @@ typedef struct {
    an attribute has been specified. */
 typedef struct attribute_id {
   XML_Char *name;
-  FPREFIX *prefix;
+  PPREFIX *prefix;
   XML_Bool maybeTokenized;
   XML_Bool xmlns;
 } ATTRIBUTE_ID;
@@ -379,7 +379,7 @@ typedef struct {
 
 typedef struct {
   const XML_Char *name;
-  FPREFIX *prefix;
+  PPREFIX *prefix;
   const ATTRIBUTE_ID *idAtt;
   int nDefaultAtts;
   int allocDefaultAtts;
@@ -404,7 +404,7 @@ typedef struct {
   XML_Bool paramEntityRead;
   HASH_TABLE paramEntities;
 #endif /* XML_DTD */
-  FPREFIX defaultPrefix;
+  PPREFIX defaultPrefix;
   /* === scaffolding for building content model === */
   XML_Bool in_eldecl;
   CONTENT_SCAFFOLD *scaffold;
@@ -502,7 +502,7 @@ static enum XML_Error storeAtts(XML_Parser parser, const ENCODING *enc,
                                 const char *attStr, TAG_NAME *tagNamePtr,
                                 BINDING **bindingsPtr,
                                 enum XML_Account account);
-static enum XML_Error addBinding(XML_Parser parser, FPREFIX *prefix,
+static enum XML_Error addBinding(XML_Parser parser, PPREFIX *prefix,
                                  const ATTRIBUTE_ID *attId, const XML_Char *uri,
                                  BINDING **bindingsPtr);
 static int defineAttribute(ELEMENT_TYPE *type, ATTRIBUTE_ID *attId,
@@ -3915,7 +3915,7 @@ is_rfc3986_uri_char(XML_Char candidate) {
    Therefore one must keep track of the old value outside of addBinding().
 */
 static enum XML_Error
-addBinding(XML_Parser parser, FPREFIX *prefix, const ATTRIBUTE_ID *attId,
+addBinding(XML_Parser parser, PPREFIX *prefix, const ATTRIBUTE_ID *attId,
            const XML_Char *uri, BINDING **bindingsPtr) {
   // "http://www.w3.org/XML/1998/namespace"
   static const XML_Char xmlNamespace[]
@@ -6586,7 +6586,7 @@ setElementTypePrefix(XML_Parser parser, ELEMENT_TYPE *elementType) {
   const XML_Char *name;
   for (name = elementType->name; *name; name++) {
     if (*name == XML_T(ASCII_COLON)) {
-      FPREFIX *prefix;
+      PPREFIX *prefix;
       const XML_Char *s;
       for (s = elementType->name; s != name; s++) {
         if (! poolAppendChar(&dtd->pool, *s))
@@ -6594,8 +6594,8 @@ setElementTypePrefix(XML_Parser parser, ELEMENT_TYPE *elementType) {
       }
       if (! poolAppendChar(&dtd->pool, XML_T('\0')))
         return 0;
-      prefix = (FPREFIX *)lookup(parser, &dtd->prefixes, poolStart(&dtd->pool),
-                                sizeof(FPREFIX));
+      prefix = (PPREFIX *)lookup(parser, &dtd->prefixes, poolStart(&dtd->pool),
+                                sizeof(PPREFIX));
       if (! prefix)
         return 0;
       if (prefix->name == poolStart(&dtd->pool))
@@ -6639,8 +6639,8 @@ getAttributeId(XML_Parser parser, const ENCODING *enc, const char *start,
       if (name[5] == XML_T('\0'))
         id->prefix = &dtd->defaultPrefix;
       else
-        id->prefix = (FPREFIX *)lookup(parser, &dtd->prefixes, name + 6,
-                                      sizeof(FPREFIX));
+        id->prefix = (PPREFIX *)lookup(parser, &dtd->prefixes, name + 6,
+                                      sizeof(PPREFIX));
       id->xmlns = XML_TRUE;
     } else {
       int i;
@@ -6654,8 +6654,8 @@ getAttributeId(XML_Parser parser, const ENCODING *enc, const char *start,
           }
           if (! poolAppendChar(&dtd->pool, XML_T('\0')))
             return NULL;
-          id->prefix = (FPREFIX *)lookup(parser, &dtd->prefixes,
-                                        poolStart(&dtd->pool), sizeof(FPREFIX));
+          id->prefix = (PPREFIX *)lookup(parser, &dtd->prefixes,
+                                        poolStart(&dtd->pool), sizeof(PPREFIX));
           if (! id->prefix)
             return NULL;
           if (id->prefix->name == poolStart(&dtd->pool))
@@ -6719,7 +6719,7 @@ getContext(XML_Parser parser) {
     int i;
     int len;
     const XML_Char *s;
-    FPREFIX *prefix = (FPREFIX *)hashTableIterNext(&iter);
+    PPREFIX *prefix = (PPREFIX *)hashTableIterNext(&iter);
     if (! prefix)
       break;
     if (! prefix->binding) {
@@ -6791,15 +6791,15 @@ setContext(XML_Parser parser, const XML_Char *context) {
       context = s;
       poolDiscard(&parser->m_tempPool);
     } else if (*s == XML_T(ASCII_EQUALS)) {
-      FPREFIX *prefix;
+      PPREFIX *prefix;
       if (poolLength(&parser->m_tempPool) == 0)
         prefix = &dtd->defaultPrefix;
       else {
         if (! poolAppendChar(&parser->m_tempPool, XML_T('\0')))
           return XML_FALSE;
         prefix
-            = (FPREFIX *)lookup(parser, &dtd->prefixes,
-                               poolStart(&parser->m_tempPool), sizeof(FPREFIX));
+            = (PPREFIX *)lookup(parser, &dtd->prefixes,
+                               poolStart(&parser->m_tempPool), sizeof(PPREFIX));
         if (! prefix)
           return XML_FALSE;
         if (prefix->name == poolStart(&parser->m_tempPool)) {
@@ -6966,13 +6966,13 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
   hashTableIterInit(&iter, &(oldDtd->prefixes));
   for (;;) {
     const XML_Char *name;
-    const FPREFIX *oldP = (FPREFIX *)hashTableIterNext(&iter);
+    const PPREFIX *oldP = (PPREFIX *)hashTableIterNext(&iter);
     if (! oldP)
       break;
     name = poolCopyString(&(newDtd->pool), oldP->name);
     if (! name)
       return 0;
-    if (! lookup(oldParser, &(newDtd->prefixes), name, sizeof(FPREFIX)))
+    if (! lookup(oldParser, &(newDtd->prefixes), name, sizeof(PPREFIX)))
       return 0;
   }
 
@@ -7004,7 +7004,7 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
       if (oldA->prefix == &oldDtd->defaultPrefix)
         newA->prefix = &newDtd->defaultPrefix;
       else
-        newA->prefix = (FPREFIX *)lookup(oldParser, &(newDtd->prefixes),
+        newA->prefix = (PPREFIX *)lookup(oldParser, &(newDtd->prefixes),
                                         oldA->prefix->name, 0);
     }
   }
@@ -7049,7 +7049,7 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
                                            oldE->idAtt->name, 0);
     newE->allocDefaultAtts = newE->nDefaultAtts = oldE->nDefaultAtts;
     if (oldE->prefix)
-      newE->prefix = (FPREFIX *)lookup(oldParser, &(newDtd->prefixes),
+      newE->prefix = (PPREFIX *)lookup(oldParser, &(newDtd->prefixes),
                                       oldE->prefix->name, 0);
     for (i = 0; i < newE->nDefaultAtts; i++) {
       newE->defaultAtts[i].id = (ATTRIBUTE_ID *)lookup(
