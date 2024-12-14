@@ -35,8 +35,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <!-- <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion> -->
-    <_ProjectFileVersion>19.29.30157</_ProjectFileVersion>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
     <ProjectGuid>{D06B6426-4762-44CC-8BAD-D79052507F2F}</ProjectGuid>
     <RootNamespace>pyexpat</RootNamespace>
   </PropertyGroup>
