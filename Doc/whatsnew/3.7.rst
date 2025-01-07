@@ -2671,3 +2671,11 @@ pyexpat / libexpat
 ------------------
 
 * Upgrade bundled libexpat to 2.6.3 to fix CVE-2024-28757, CVE-2024-45490, CVE-2024-45491 and CVE-2024-45492.
+
+Notable changes in 3.7.17.6
+=========================
+
+pyexpat / libexpat
+------------------
+
+* Upgrade bundled libexpat to 2.6.4 to fix CVE-2024-50602.
