@@ -141,7 +141,7 @@ def _strip_quoted_realnames(addr):
 
 supports_strict_parsing = True
 
-def getaddresses(fieldvalues, *, strict=True):
+def getaddresses(fieldvalues, strict=True):
     """Return a list of (REALNAME, EMAIL) or ('','') for each fieldvalue.
     When parsing fails for a fieldvalue, a 2-tuple of ('', '') is returned in
     its place.

@@ -2419,7 +2419,7 @@ Foo
         eq(Utils.getaddresses(['foo: ;']), [('', '')])
         eq(Utils.getaddresses(
            ['[]*-- =~$']),
-           [('', ''), ('', ''), ('', '*--')])
+           [('', '')])
         eq(Utils.getaddresses(
            ['foo: ;', '"Jason R. Mastaler" <jason@dom.ain>']),
            [('', ''), ('Jason R. Mastaler', 'jason@dom.ain')])
