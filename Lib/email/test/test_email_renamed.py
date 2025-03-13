@@ -2280,7 +2280,7 @@ Foo
         eq(utils.getaddresses(['foo: ;']), [('', '')])
         eq(utils.getaddresses(
            ['[]*-- =~$']),
-           [('', ''), ('', ''), ('', '*--')])
+           [('', '')])
         eq(utils.getaddresses(
            ['foo: ;', '"Jason R. Mastaler" <jason@dom.ain>']),
            [('', ''), ('Jason R. Mastaler', 'jason@dom.ain')])
