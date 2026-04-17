@@ -1,0 +1,223 @@
+.. date: 2026-03-27-22-06-10
+.. gh-issue: 146458
+.. nonce: fYj0UQ
+.. release date: 2026-04-18
+.. section: Windows
+
+Fix incorrect REPL height and width tracking on console window resize on
+Windows.
+
+..
+
+.. date: 2026-04-10-16-28-21
+.. gh-issue: 148395
+.. nonce: kfzm0G
+.. section: Security
+
+Fix a dangling input pointer in :class:`lzma.LZMADecompressor`,
+:class:`bz2.BZ2Decompressor`, and internal :class:`!zlib._ZlibDecompressor`
+when memory allocation fails with :exc:`MemoryError`, which could let a
+subsequent :meth:`!decompress` call read or write through a stale pointer to
+the already-released caller buffer.
+
+..
+
+.. date: 2026-03-25-00-51-03
+.. gh-issue: 146333
+.. nonce: LqdL__bn
+.. section: Security
+
+Fix quadratic backtracking in :class:`configparser.RawConfigParser` option
+parsing regexes (``OPTCRE`` and ``OPTCRE_NV``). A crafted configuration line
+with many whitespace characters could cause excessive CPU usage.
+
+..
+
+.. date: 2026-04-16-13-30-00
+.. gh-issue: 148651
+.. nonce: ZsTdLk
+.. section: Library
+
+Fix reference leak in :class:`compression.zstd.ZstdDecompressor` when an
+invalid option key is passed.
+
+..
+
+.. date: 2026-04-14-09-04-35
+.. gh-issue: 148508
+.. nonce: -GiXml
+.. section: Library
+
+An intermittent timing error when running SSL tests on iOS has been
+resolved.
+
+..
+
+.. date: 2026-04-12-16-40-11
+.. gh-issue: 148370
+.. nonce: 0Li2EK
+.. section: Library
+
+:mod:`configparser`: prevent quadratic behavior when a
+:exc:`~configparser.ParsingError` is raised after a parser fails to parse
+multiple lines. Patch by Bénédikt Tran.
+
+..
+
+.. date: 2026-04-09-12-42-42
+.. gh-issue: 148254
+.. nonce: Xt7vKs
+.. section: Library
+
+Use singular "sec" instead of "secs" in :mod:`timeit` verbose output for
+consistency with other time units.
+
+..
+
+.. date: 2026-04-07-14-13-40
+.. gh-issue: 148192
+.. nonce: 34AUYQ
+.. section: Library
+
+``email.generator.Generator._make_boundary`` could fail to detect a
+duplicate boundary string if linesep was not \n. It now correctly detects
+boundary strings when linesep is \r\n as well.
+
+..
+
+.. date: 2026-03-22-23-42-22
+.. gh-issue: 146313
+.. nonce: RtDeAd
+.. section: Library
+
+Fix a deadlock in :mod:`multiprocessing`'s resource tracker where the parent
+process could hang indefinitely in :func:`os.waitpid` during interpreter
+shutdown if a child created via :func:`os.fork` still held the resource
+tracker's pipe open.
+
+..
+
+.. date: 2026-03-11-15-09-52
+.. gh-issue: 145831
+.. nonce: _sW94w
+.. section: Library
+
+Fix :func:`!email.quoprimime.decode` leaving a stray ``\r`` when
+``eol='\r\n'`` by stripping the full *eol* string instead of one character.
+
+..
+
+.. date: 2026-02-22-00-00-00
+.. gh-issue: 145105
+.. nonce: csv-reader-reentrant
+.. section: Library
+
+Fix crash in :mod:`csv` reader when iterating with a re-entrant iterator
+that calls :func:`next` on the same reader from within ``__next__``.
+
+..
+
+.. date: 2026-01-19-21-23-18
+.. gh-issue: 105936
+.. nonce: dGrzjM
+.. section: Library
+
+Attempting to mutate non-field attributes of :mod:`dataclasses` with both
+*frozen* and *slots* being ``True`` now raises
+:class:`~dataclasses.FrozenInstanceError` instead of :class:`TypeError`.
+Their non-dataclass subclasses can now freely mutate non-field attributes,
+and the original non-slotted class can be garbage collected.
+
+..
+
+.. date: 2024-02-10-21-25-22
+.. gh-issue: 70039
+.. nonce: 6wvcAP
+.. section: Library
+
+Fixed bug where :meth:`smtplib.SMTP.starttls` could fail if
+:meth:`smtplib.SMTP.connect` is called explicitly rather than implicitly.
+
+..
+
+.. date: 2026-04-02-07-20-00
+.. gh-issue: 146646
+.. nonce: GlobDoc1
+.. section: Documentation
+
+Document that :func:`glob.glob`, :func:`glob.iglob`,
+:meth:`pathlib.Path.glob`, and :meth:`pathlib.Path.rglob` silently suppress
+:exc:`OSError` exceptions raised from scanning the filesystem.
+
+..
+
+.. date: 2026-04-11-17-28-52
+.. gh-issue: 148393
+.. nonce: lX6gwN
+.. section: Core and Builtins
+
+Fix data races between :c:func:`PyDict_Watch` / :c:func:`PyDict_Unwatch` and
+concurrent dict mutation in the :term:`free-threaded build`.
+
+..
+
+.. date: 2026-04-10-14-20-54
+.. gh-issue: 148284
+.. nonce: HKs-S_
+.. section: Core and Builtins
+
+Fix high stack consumption in Python's interpreter loop on Clang 22 by
+setting function limits for inlining when building with computed gotos.
+
+..
+
+.. date: 2026-04-09-14-18-33
+.. gh-issue: 148037
+.. nonce: aP3CSX
+.. section: Core and Builtins
+
+Remove critical section from :c:func:`!PyCode_Addr2Line` in free-threading.
+
+..
+
+.. date: 2026-04-07-20-21-44
+.. gh-issue: 148208
+.. nonce: JAxpDU
+.. section: Core and Builtins
+
+Fix recursion depth leak in :c:func:`PyObject_Print`
+
+..
+
+.. date: 2026-04-07-07-21-30
+.. gh-issue: 137814
+.. nonce: 6yRTeu
+.. section: Core and Builtins
+
+Fix the ``__qualname__`` attribute of ``__annotate__`` functions on
+functions.
+
+..
+
+.. date: 2026-04-14-15-20-29
+.. gh-issue: 148535
+.. nonce: JjKiaa
+.. section: Build
+
+No longer use the ``gcc -fprofile-update=atomic`` flag on i686. The flag has
+been added to fix a random GCC internal error on PGO build (:gh:`145801`)
+caused by corruption of profile data (.gcda files). The problem is that it
+makes the PGO build way slower (up to 47x slower) on i686. Since the GCC
+internal error was not seen on i686 so far, don't use
+``-fprofile-update=atomic`` on i686 anymore. Patch by Victor Stinner.
+
+..
+
+.. date: 2026-03-21-18-51-31
+.. gh-issue: 146264
+.. nonce: Q9Ej4m
+.. section: Build
+
+Fix static module builds on non-WASI targets by linking HACL dependencies as
+static libraries when ``MODULE_BUILDTYPE=static``, preventing duplicate
+``_Py_LibHacl_*`` symbol errors at link time.
