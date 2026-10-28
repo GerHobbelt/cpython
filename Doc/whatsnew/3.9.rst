@@ -1826,3 +1826,24 @@ Other
 Not included: the expat amplification-tuning API from :gh:`90949`.  The
 protection itself (CVE-2025-59375) is built into libexpat 2.7.2 and later
 and is on by default, so 3.9 gets it from the bundled libexpat 2.9.0.
+
+
+Notable changes in 3.9.25.2
+===========================
+
+This is an ActiveState security release of the 3.9 line, on top of
+3.9.25.1.
+
+tempfile
+--------
+
+* Cleanup of :class:`tempfile.TemporaryDirectory` no longer resolves paths
+  again when it recovers from a permission error.  It works relative to the
+  open directory file descriptors instead, so replacing a directory of the
+  tree with a symbolic link during cleanup can no longer make it delete files,
+  or reset their permissions, outside of the temporary directory.
+  (:gh:`157579`, CVE 2026-12345.)
+* Two upstream cleanup fixes that the security fix builds on are included:
+  a :exc:`PermissionError` is no longer masked by :exc:`NotADirectoryError`
+  (:issue:`43153`), and cleanup no longer recurses endlessly when the
+  temporary directory itself cannot be removed (:gh:`79325`).
