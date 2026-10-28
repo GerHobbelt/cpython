@@ -701,6 +701,72 @@ class BasicTest(TestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(resp.read(), 'Hello')
 
+    def test_too_many_interim_responses(self):
+        # gh-150743 (CVE-2021-3737 follow-up): a server streaming
+        # "100 Continue" responses forever must not hang getresponse().
+        body = ('HTTP/1.1 100 Continue\r\n\r\n'
+                * (httplib._MAXINTERIMRESPONSES + 1))
+        resp = httplib.HTTPResponse(FakeSocket(body))
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 interim responses"):
+            resp.begin()
+
+    def test_multiple_interim_responses(self):
+        # A reasonable number of interim responses before the final
+        # response is skipped as before.
+        body = (
+            'HTTP/1.1 100 Continue\r\n\r\n' * 3 +
+            'HTTP/1.1 200 OK\r\n'
+            'Content-Length: 5\r\n'
+            '\r\n'
+            'hello'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.read(), 'hello')
+        resp.close()
+
+    def test_chunked_trailers(self):
+        # A few trailer lines after the last chunk are read and discarded.
+        body = (
+            'HTTP/1.1 200 OK\r\n'
+            'Transfer-Encoding: chunked\r\n\r\n'
+            '5\r\nhello\r\n0\r\n'
+            'X-Trailer1: 1\r\nX-Trailer2: 2\r\n\r\n'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        self.assertEqual(resp.read(), 'hello')
+        resp.close()
+
+    def test_chunked_too_many_trailers(self):
+        # gh-150743 (CVE-2021-3737 follow-up): a response streaming endless
+        # trailer lines must raise, not hang.
+        body = (
+            'HTTP/1.1 200 OK\r\n'
+            'Transfer-Encoding: chunked\r\n\r\n'
+            '5\r\nhello\r\n0\r\n'
+            + ''.join('X-Trailer%d: %d\r\n' % (i, i)
+                      for i in range(httplib._MAXHEADERS + 1))
+            + '\r\n'
+        )
+        # An unbounded read() reaches the trailers via the final 0 chunk.
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 trailers"):
+            resp.read()
+        resp.close()
+
+        # A bounded read(amt) larger than the body hits the same limit.
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 trailers"):
+            resp.read(6)
+        resp.close()
+
     def test_overflowing_chunked_line(self):
         body = (
             'HTTP/1.1 200 OK\r\n'
