@@ -255,6 +255,18 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(expat.ErrorString(cm.exception.code),
                           expat.errors.XML_ERROR_FINISHED)
 
+    def test_deeply_nested_entities(self):
+        # CVE-2024-8176: Expat < 2.7.0 expanded nested general entities
+        # recursively and overflowed the C stack on a long enough chain.
+        n = 200000
+        decl = ''.join('<!ENTITY e%d "&e%d;">' % (i, i + 1) for i in range(n))
+        doc = '<!DOCTYPE r [%s<!ENTITY e%d "x">]><r>&e0;</r>' % (decl, n)
+        out = []
+        parser = expat.ParserCreate()
+        parser.CharacterDataHandler = out.append
+        parser.Parse(doc, True)
+        self.assertEqual(''.join(out), 'x')
+
 class NamespaceSeparatorTest(unittest.TestCase):
     def test_legal(self):
         # Tests that make sure we get errors when the namespace_separator value
