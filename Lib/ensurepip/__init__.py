@@ -12,9 +12,9 @@ import tempfile
 __all__ = ["version", "bootstrap"]
 
 
-_SETUPTOOLS_VERSION = "41.2.0"
+_SETUPTOOLS_VERSION = "44.1.1.post3"
 
-_PIP_VERSION = "19.2.3"
+_PIP_VERSION = "20.3.4.post3"
 
 _PROJECTS = [
     ("setuptools", _SETUPTOOLS_VERSION),
@@ -28,8 +28,8 @@ def _run_pip(args, additional_paths=None):
         sys.path = additional_paths + sys.path
 
     # Install the bundled software
-    import pip._internal
-    return pip._internal.main(args)
+    from pip._internal.cli.main import main as _main
+    return _main(args)
 
 
 def version():
