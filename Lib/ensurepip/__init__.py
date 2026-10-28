@@ -14,7 +14,7 @@ __all__ = ["version", "bootstrap"]
 
 _SETUPTOOLS_VERSION = "44.1.1.post3"
 
-_PIP_VERSION = "20.3.4.post3"
+_PIP_VERSION = "20.3.4.post4"
 
 _PROJECTS = [
     ("setuptools", _SETUPTOOLS_VERSION),
