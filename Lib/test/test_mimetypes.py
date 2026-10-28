@@ -8,6 +8,8 @@ import sys
 from test import test_support
 
 # Tell it we don't know about external files:
+# The default list, before it is emptied below for test isolation.
+knownfiles = mimetypes.knownfiles
 mimetypes.knownfiles = []
 mimetypes.inited = False
 mimetypes._default_mime_types()
@@ -67,6 +69,12 @@ class MimeTypesTestCase(unittest.TestCase):
         eq(all, [])
 
 
+class KnownfilesTestCase(unittest.TestCase):
+    @unittest.skipIf(sys.platform == "win32", "non-Windows only")
+    def test_default_knownfiles(self):
+        self.assertIn("/etc/mime.types", knownfiles)
+
+
 @unittest.skipUnless(sys.platform.startswith("win"), "Windows only")
 class Win32MimeTypesTestCase(unittest.TestCase):
     def setUp(self):
@@ -89,6 +97,10 @@ class Win32MimeTypesTestCase(unittest.TestCase):
         eq(db.guess_type("foo.txt"), ("text/plain", None))
         eq(db.guess_type("image.jpg"), ("image/jpeg", None))
         eq(db.guess_type("image.png"), ("image/png", None))
+
+    def test_default_knownfiles(self):
+        # CVE-2024-3220: the Unix paths would resolve to e.g. C:\etc\mime.types
+        self.assertEqual(knownfiles, [])
 
     def test_non_latin_extension(self):
         import _winreg
@@ -163,6 +175,7 @@ class Win32MimeTypesTestCase(unittest.TestCase):
 
 def test_main():
     test_support.run_unittest(MimeTypesTestCase,
+        KnownfilesTestCase,
         Win32MimeTypesTestCase
     )
 

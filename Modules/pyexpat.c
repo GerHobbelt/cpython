@@ -8,6 +8,15 @@
 
 #define XML_COMBINED_VERSION (10000*XML_MAJOR_VERSION+100*XML_MINOR_VERSION+XML_MICRO_VERSION)
 
+#if XML_COMBINED_VERSION >= 20800
+/* Process-wide hash salt for XML_SetHashSalt16Bytes(), read from the OS
+   random source at import (gh-149018).  2.7 has no 16-byte expat secret
+   in _Py_HashSecret, and _Py_HashSecret is all zeros unless hash
+   randomization (-R) is enabled. */
+static uint8_t expat_hash_salt16[16];
+static int expat_hash_salt16_set = 0;
+#endif
+
 #ifndef PyDoc_STRVAR
 
 /*
@@ -1325,7 +1334,14 @@ newxmlparseobject(char *encoding, char *namespace_separator, PyObject *intern)
         Py_DECREF(self);
         return NULL;
     }
-#if XML_COMBINED_VERSION >= 20100
+#if XML_COMBINED_VERSION >= 20800
+    /* Prefer 16 bytes of entropy, only expat >= 2.8.0.  See gh-149018. */
+    if (expat_hash_salt16_set)
+        XML_SetHashSalt16Bytes(self->itself, expat_hash_salt16);
+    else
+        XML_SetHashSalt(self->itself,
+                        (unsigned long)_Py_HashSecret.prefix);
+#elif XML_COMBINED_VERSION >= 20100
     /* This feature was added upstream in libexpat 2.1.0. */
     XML_SetHashSalt(self->itself,
                     (unsigned long)_Py_HashSecret.prefix);
@@ -1850,6 +1866,12 @@ MODULE_INITFUNC(void)
 
     if (errmod_name == NULL)
         return;
+#if XML_COMBINED_VERSION >= 20800
+    if (_PyOS_URandom(expat_hash_salt16, sizeof(expat_hash_salt16)) == 0)
+        expat_hash_salt16_set = 1;
+    else
+        PyErr_Clear();
+#endif
     modelmod_name = PyString_FromString(MODULE_NAME ".model");
     if (modelmod_name == NULL)
         return;
@@ -2051,6 +2073,11 @@ MODULE_INITFUNC(void)
     capi.SetHashSalt = XML_SetHashSalt;
 #else
     capi.SetHashSalt = NULL;
+#endif
+#if XML_COMBINED_VERSION >= 20800
+    capi.SetHashSalt16Bytes = XML_SetHashSalt16Bytes;
+#else
+    capi.SetHashSalt16Bytes = NULL;
 #endif
 
     /* export using capsule */
