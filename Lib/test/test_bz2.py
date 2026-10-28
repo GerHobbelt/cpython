@@ -2,6 +2,7 @@ from test import test_support as support
 from test.test_support import TESTFN, _4G, bigmemtest, import_module, findfile
 
 import unittest
+import binascii
 from cStringIO import StringIO
 import os
 import subprocess
@@ -416,6 +417,20 @@ class BZ2DecompressorTest(BaseTest):
         text = bz2d.decompress(self.DATA)
         self.assertRaises(EOFError, bz2d.decompress, "anything")
         self.assertRaises(EOFError, bz2d.decompress, "")
+
+    def test_decompress_after_data_error(self):
+        # gh-150599: re-entering BZ2_bzDecompress() after an error could
+        # write out of bounds; the decompressor is now unusable instead.
+        data = binascii.unhexlify(
+            "425a6839314159265359000000000000007fffff000000000000000000000000"
+            "00000000000000000000000000000000000000e0370000000000000000000000"
+            "000000000000000000000000000000000000000000000000000083f3"
+        )
+        bzd = BZ2Decompressor()
+        with self.assertRaisesRegexp(IOError, "invalid data stream"):
+            bzd.decompress(data)
+        with self.assertRaisesRegexp(ValueError, "previous error"):
+            bzd.decompress(b'\x00' * 18)
 
     @bigmemtest(_4G, memuse=1.25)
     def testBigmem(self, size):

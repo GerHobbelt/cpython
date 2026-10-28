@@ -120,6 +120,7 @@ typedef struct {
     PyObject_HEAD
     bz_stream bzs;
     int running;
+    int bzerror;
     PyObject *unused_data;
 #ifdef WITH_THREAD
     PyThread_type_lock lock;
@@ -1942,6 +1943,13 @@ BZ2Decomp_decompress(BZ2DecompObject *self, PyObject *args)
                                         "already found");
         goto error;
     }
+    if (self->bzerror) {
+        /* Re-entering BZ2_bzDecompress() after an error can write out of
+           bounds. */
+        PyErr_SetString(PyExc_ValueError,
+                        "Decompressor is unusable after a previous error");
+        goto error;
+    }
 
     ret = PyString_FromStringAndSize(NULL, SMALLCHUNK);
     if (!ret)
@@ -1975,6 +1983,7 @@ BZ2Decomp_decompress(BZ2DecompObject *self, PyObject *args)
             break;
         }
         if (bzerror != BZ_OK) {
+            self->bzerror = bzerror;
             Util_CatchBZ2Error(bzerror);
             goto error;
         }
@@ -1989,6 +1998,8 @@ BZ2Decomp_decompress(BZ2DecompObject *self, PyObject *args)
             if (buffer_left == 0) {
                 if (Util_GrowBuffer(&ret) < 0) {
                     BZ2_bzDecompressEnd(bzs);
+                    /* The stream state is freed: don't reuse it. */
+                    self->bzerror = BZ_MEM_ERROR;
                     goto error;
                 }
                 bzs->next_out = BUF(ret) + output_size;
@@ -2050,6 +2061,7 @@ BZ2Decomp_init(BZ2DecompObject *self, PyObject *args, PyObject *kwargs)
     }
 
     self->running = 1;
+    self->bzerror = 0;
 
     return 0;
 
