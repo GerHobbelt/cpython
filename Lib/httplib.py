@@ -219,6 +219,13 @@ _MAXLINE = 65536
 # maximum amount of headers accepted
 _MAXHEADERS = 100
 
+# maximal number of interim (1xx) responses tolerated before the final
+# response.  Real servers send at most a few; without a bound, a server
+# streaming "100 Continue" responses would hang getresponse() forever.
+# A socket timeout cannot detect that as data keeps arriving within every
+# timeout window.
+_MAXINTERIMRESPONSES = 100
+
 # Header name/value ABNF (http://tools.ietf.org/html/rfc7230#section-3.2)
 #
 # VCHAR          = %x21-7E
@@ -453,11 +460,12 @@ class HTTPResponse:
             return
 
         # read until we get a non-100 response
-        while True:
+        for _ in range(_MAXINTERIMRESPONSES):
             version, status, reason = self._read_status()
             if status != CONTINUE:
                 break
             # skip the header from the 100 response
+            skipped = 0
             while True:
                 skip = self.fp.readline(_MAXLINE + 1)
                 if len(skip) > _MAXLINE:
@@ -465,8 +473,14 @@ class HTTPResponse:
                 skip = skip.strip()
                 if not skip:
                     break
+                skipped += 1
+                if skipped > _MAXHEADERS:
+                    raise HTTPException("got more than %d headers" % _MAXHEADERS)
                 if self.debuglevel > 0:
                     print "header:", skip
+        else:
+            raise HTTPException("got more than %d interim responses"
+                                % _MAXINTERIMRESPONSES)
 
         self.status = status
         self.reason = reason.strip()
@@ -668,6 +682,7 @@ class HTTPResponse:
 
         # read and discard trailer up to the CRLF terminator
         ### note: we shouldn't have any trailers!
+        trailers_read = 0
         while True:
             line = self.fp.readline(_MAXLINE + 1)
             if len(line) > _MAXLINE:
@@ -678,6 +693,13 @@ class HTTPResponse:
                 break
             if line == '\r\n':
                 break
+            # Bound the trailer count just as response headers are bounded.
+            # A server streaming trailer lines forever would otherwise hang
+            # the client; a socket timeout cannot detect that as data keeps
+            # arriving within every timeout window.
+            trailers_read += 1
+            if trailers_read > _MAXHEADERS:
+                raise HTTPException("got more than %d trailers" % _MAXHEADERS)
 
         # we read everything; close the "file"
         self.close()
