@@ -2059,6 +2059,9 @@ statichere PyTypeObject TreeBuilder_Type = {
 #include "pyexpat.h"
 static struct PyExpat_CAPI* expat_capi;
 #define EXPAT(func) (expat_capi->func)
+/* Hash salt for SetHashSalt16Bytes(), see gh-149018 and pyexpat.c. */
+static unsigned char expat_hash_salt16[16];
+static int expat_hash_salt16_set = 0;
 #else
 #define EXPAT(func) (XML_##func)
 #endif
@@ -2592,6 +2595,13 @@ xmlparser(PyObject* self_, PyObject* args, PyObject* kw)
         PyErr_NoMemory();
         return NULL;
     }
+#if defined(USE_PYEXPAT_CAPI)
+    /* Prefer 16 bytes of entropy, only expat >= 2.8.0.  See gh-149018. */
+    if (expat_hash_salt16_set && EXPAT(SetHashSalt16Bytes) != NULL) {
+        EXPAT(SetHashSalt16Bytes)(self->parser, expat_hash_salt16);
+    }
+    else
+#endif
     /* expat < 2.1.0 has no XML_SetHashSalt() */
     if (EXPAT(SetHashSalt) != NULL) {
         EXPAT(SetHashSalt)(self->parser,
@@ -3209,6 +3219,10 @@ init_elementtree(void)
             expat_capi->MICRO_VERSION != XML_MICRO_VERSION)
             expat_capi = NULL;
     }
+    if (_PyOS_URandom(expat_hash_salt16, sizeof(expat_hash_salt16)) == 0)
+        expat_hash_salt16_set = 1;
+    else
+        PyErr_Clear();
 #endif
 
     elementtree_parseerror_obj = PyErr_NewException(

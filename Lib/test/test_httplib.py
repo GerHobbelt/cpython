@@ -622,6 +622,46 @@ class BasicTest(TestCase):
         self.assertEqual(resp.read(), 'Hello\r\n')
         self.assertTrue(resp.isclosed())
 
+    def test_malformed_content_length(self):
+        # RFC 9112: Content-Length = 1*DIGIT.  Values that int() accepts but
+        # the grammar forbids must not be used to frame the body.
+        for value in ('+5', '5_0', '5 0', '0x5'):
+            sock = FakeSocket(
+                'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\nHello\r\n' % value)
+            resp = httplib.HTTPResponse(sock, method="GET")
+            resp.begin()
+            self.assertIsNone(resp.length, value)
+            self.assertEqual(resp.read(), 'Hello\r\n')
+            resp.close()
+
+    def test_content_length_with_whitespace(self):
+        # RFC 9112, section 5.1: optional whitespace (SP / HTAB) around
+        # the field value is not part of the value, so it must not
+        # prevent the Content-Length from being used to frame the body.
+        for value in ('7 ', '7\t', '7 \t ', ' 7 '):
+            sock = FakeSocket(
+                'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n'
+                'Hello\r\nextra' % value)
+            resp = httplib.HTTPResponse(sock, method="GET")
+            resp.begin()
+            self.assertEqual(resp.length, 7, repr(value))
+            self.assertEqual(resp.read(), 'Hello\r\n')
+            self.assertTrue(resp.isclosed())
+            resp.close()
+
+    def test_malformed_chunk_size(self):
+        # RFC 9112: chunk-size = 1*HEXDIG.  Reject sizes that int(_, 16) accepts
+        # but the grammar forbids (a sign, an "0x" prefix or leading
+        # whitespace).
+        start = 'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n'
+        for size in ('-5', '+5', '0x5', ' 5'):
+            sock = FakeSocket(start + '%s\r\nHELLO\r\n0\r\n\r\n' % size)
+            resp = httplib.HTTPResponse(sock, method="GET")
+            resp.begin()
+            self.assertRaises(httplib.IncompleteRead, resp.read)
+            self.assertTrue(resp.isclosed(), size)
+            resp.close()
+
     def test_incomplete_read(self):
         sock = FakeSocket('HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nHello\r\n')
         resp = httplib.HTTPResponse(sock, method="GET")
@@ -676,6 +716,96 @@ class BasicTest(TestCase):
         )
         resp = httplib.HTTPResponse(FakeSocket(body))
         self.assertRaises(httplib.LineTooLong, resp.begin)
+
+    def test_overflowing_header_limit_after_100(self):
+        # CVE-2021-3737: the headers of a 100 Continue response used to be
+        # skipped without any limit on their number.
+        body = (
+            'HTTP/1.1 100 OK\r\n'
+            + 'r\n' * 32768
+            + '\r\nHTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body))
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 headers"):
+            resp.begin()
+
+    def test_headers_after_100(self):
+        # A 100 Continue response with a few headers is still skipped.
+        body = (
+            'HTTP/1.1 100 Continue\r\nX-A: 1\r\nX-B: 2\r\n\r\n'
+            'HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHello'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body))
+        resp.begin()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.read(), 'Hello')
+
+    def test_too_many_interim_responses(self):
+        # gh-150743 (CVE-2021-3737 follow-up): a server streaming
+        # "100 Continue" responses forever must not hang getresponse().
+        body = ('HTTP/1.1 100 Continue\r\n\r\n'
+                * (httplib._MAXINTERIMRESPONSES + 1))
+        resp = httplib.HTTPResponse(FakeSocket(body))
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 interim responses"):
+            resp.begin()
+
+    def test_multiple_interim_responses(self):
+        # A reasonable number of interim responses before the final
+        # response is skipped as before.
+        body = (
+            'HTTP/1.1 100 Continue\r\n\r\n' * 3 +
+            'HTTP/1.1 200 OK\r\n'
+            'Content-Length: 5\r\n'
+            '\r\n'
+            'hello'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.read(), 'hello')
+        resp.close()
+
+    def test_chunked_trailers(self):
+        # A few trailer lines after the last chunk are read and discarded.
+        body = (
+            'HTTP/1.1 200 OK\r\n'
+            'Transfer-Encoding: chunked\r\n\r\n'
+            '5\r\nhello\r\n0\r\n'
+            'X-Trailer1: 1\r\nX-Trailer2: 2\r\n\r\n'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        self.assertEqual(resp.read(), 'hello')
+        resp.close()
+
+    def test_chunked_too_many_trailers(self):
+        # gh-150743 (CVE-2021-3737 follow-up): a response streaming endless
+        # trailer lines must raise, not hang.
+        body = (
+            'HTTP/1.1 200 OK\r\n'
+            'Transfer-Encoding: chunked\r\n\r\n'
+            '5\r\nhello\r\n0\r\n'
+            + ''.join('X-Trailer%d: %d\r\n' % (i, i)
+                      for i in range(httplib._MAXHEADERS + 1))
+            + '\r\n'
+        )
+        # An unbounded read() reaches the trailers via the final 0 chunk.
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 trailers"):
+            resp.read()
+        resp.close()
+
+        # A bounded read(amt) larger than the body hits the same limit.
+        resp = httplib.HTTPResponse(FakeSocket(body), method="GET")
+        resp.begin()
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 trailers"):
+            resp.read(6)
+        resp.close()
 
     def test_overflowing_chunked_line(self):
         body = (

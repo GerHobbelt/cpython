@@ -219,6 +219,13 @@ _MAXLINE = 65536
 # maximum amount of headers accepted
 _MAXHEADERS = 100
 
+# maximal number of interim (1xx) responses tolerated before the final
+# response.  Real servers send at most a few; without a bound, a server
+# streaming "100 Continue" responses would hang getresponse() forever.
+# A socket timeout cannot detect that as data keeps arriving within every
+# timeout window.
+_MAXINTERIMRESPONSES = 100
+
 # Header name/value ABNF (http://tools.ietf.org/html/rfc7230#section-3.2)
 #
 # VCHAR          = %x21-7E
@@ -260,6 +267,11 @@ _contains_disallowed_url_pchar_re = re.compile('[\x00-\x20\x7f-\xff]')
 # These characters are not allowed within HTTP method names
 # to prevent http header injection.
 _contains_disallowed_method_pchar_re = re.compile('[\x00-\x1f]')
+
+# RFC 9112: Content-Length = 1*DIGIT and chunk-size = 1*HEXDIG.
+# int() is more permissive, so we match against the grammar before calling it.
+_is_legal_content_length = re.compile(r'[0-9]+\Z').match
+_is_legal_chunk_size = re.compile(r'[0-9a-fA-F]+\Z').match
 
 # We always set the Content-Length header for these methods because some
 # servers will otherwise respond with a 411
@@ -448,11 +460,12 @@ class HTTPResponse:
             return
 
         # read until we get a non-100 response
-        while True:
+        for _ in range(_MAXINTERIMRESPONSES):
             version, status, reason = self._read_status()
             if status != CONTINUE:
                 break
             # skip the header from the 100 response
+            skipped = 0
             while True:
                 skip = self.fp.readline(_MAXLINE + 1)
                 if len(skip) > _MAXLINE:
@@ -460,8 +473,14 @@ class HTTPResponse:
                 skip = skip.strip()
                 if not skip:
                     break
+                skipped += 1
+                if skipped > _MAXHEADERS:
+                    raise HTTPException("got more than %d headers" % _MAXHEADERS)
                 if self.debuglevel > 0:
                     print "header:", skip
+        else:
+            raise HTTPException("got more than %d interim responses"
+                                % _MAXINTERIMRESPONSES)
 
         self.status = status
         self.reason = reason.strip()
@@ -503,14 +522,12 @@ class HTTPResponse:
         # do we have a Content-Length?
         # NOTE: RFC 2616, S4.4, #3 says we ignore this if tr_enc is "chunked"
         length = self.msg.getheader('content-length')
-        if length and not self.chunked:
-            try:
-                self.length = int(length)
-            except ValueError:
-                self.length = None
-            else:
-                if self.length < 0:  # ignore nonsensical negative lengths
-                    self.length = None
+        if length is not None:
+            # RFC 9112, section 5.1: optional whitespace (SP / HTAB) around
+            # the field value is not part of the value.
+            length = length.strip(' \t')
+        if length and not self.chunked and _is_legal_content_length(length):
+            self.length = int(length)
         else:
             self.length = None
 
@@ -632,7 +649,10 @@ class HTTPResponse:
                 i = line.find(';')
                 if i >= 0:
                     line = line[:i] # strip chunk-extensions
+                line = line.rstrip()
                 try:
+                    if not _is_legal_chunk_size(line):
+                        raise ValueError("invalid chunk size")
                     chunk_left = int(line, 16)
                 except ValueError:
                     # close the connection as protocol synchronisation is
@@ -662,6 +682,7 @@ class HTTPResponse:
 
         # read and discard trailer up to the CRLF terminator
         ### note: we shouldn't have any trailers!
+        trailers_read = 0
         while True:
             line = self.fp.readline(_MAXLINE + 1)
             if len(line) > _MAXLINE:
@@ -672,6 +693,13 @@ class HTTPResponse:
                 break
             if line == '\r\n':
                 break
+            # Bound the trailer count just as response headers are bounded.
+            # A server streaming trailer lines forever would otherwise hang
+            # the client; a socket timeout cannot detect that as data keeps
+            # arriving within every timeout window.
+            trailers_read += 1
+            if trailers_read > _MAXHEADERS:
+                raise HTTPException("got more than %d trailers" % _MAXHEADERS)
 
         # we read everything; close the "file"
         self.close()

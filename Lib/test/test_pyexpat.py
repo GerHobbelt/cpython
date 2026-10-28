@@ -255,6 +255,18 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(expat.ErrorString(cm.exception.code),
                           expat.errors.XML_ERROR_FINISHED)
 
+    def test_deeply_nested_entities(self):
+        # CVE-2024-8176: Expat < 2.7.0 expanded nested general entities
+        # recursively and overflowed the C stack on a long enough chain.
+        n = 200000
+        decl = ''.join('<!ENTITY e%d "&e%d;">' % (i, i + 1) for i in range(n))
+        doc = '<!DOCTYPE r [%s<!ENTITY e%d "x">]><r>&e0;</r>' % (decl, n)
+        out = []
+        parser = expat.ParserCreate()
+        parser.CharacterDataHandler = out.append
+        parser.Parse(doc, True)
+        self.assertEqual(''.join(out), 'x')
+
 class NamespaceSeparatorTest(unittest.TestCase):
     def test_legal(self):
         # Tests that make sure we get errors when the namespace_separator value
@@ -666,6 +678,57 @@ class ForeignDTDTests(unittest.TestCase):
         self.assertEqual(handler_call_args, [("bar", "baz")])
 
 
+class ElementDeclHandlerTest(unittest.TestCase):
+    def test_deeply_nested_content_model(self):
+        # This should raise a RuntimeError (recursion limit) and not crash.
+        # See https://github.com/python/cpython/issues/145986.
+        N = 500000
+        data = (
+            '<!DOCTYPE root [\n<!ELEMENT root '
+            + '(a, ' * N + 'a' + ')' * N
+            + '>\n]>\n<root/>\n'
+        )
+
+        parser = expat.ParserCreate()
+        parser.ElementDeclHandler = lambda _1, _2: None
+        with self.assertRaises(RuntimeError):
+            parser.Parse(data, True)
+
+    def test_nested_content_model(self):
+        # A modestly nested content model is still converted.
+        models = []
+        parser = expat.ParserCreate()
+        parser.ElementDeclHandler = lambda name, model: models.append(model)
+        parser.Parse('<!DOCTYPE root [\n<!ELEMENT root ((a, b), c)>\n'
+                     '<!ELEMENT a EMPTY>\n]>\n<root/>\n', True)
+        self.assertEqual(len(models), 2)
+        self.assertEqual(len(models[0][3]), 2)
+
+
+@unittest.skipIf(expat.version_info < (2, 8, 0),
+                 "XML_SetHashSalt16Bytes needs expat >= 2.8.0")
+class HashSaltTest(unittest.TestCase):
+    # gh-149018 (CVE-2026-7210): parsers get 16 bytes of OS entropy as their
+    # hash salt instead of the 0 from _Py_HashSecret (without -R), which made
+    # expat fall back to its own time-based salt.  EXPAT_ENTROPY_DEBUG makes
+    # expat report on stderr where each parser's salt came from.
+    def check_salt(self, code):
+        from test.script_helper import assert_python_ok
+        rc, out, err = assert_python_ok('-c', code, EXPAT_ENTROPY_DEBUG='1')
+        lines = [l for l in err.splitlines() if l.startswith('expat: Entropy')]
+        self.assertTrue(lines, err)
+        for line in lines:
+            self.assertIn('explicit(16)', line)
+
+    def test_pyexpat(self):
+        self.check_salt("import pyexpat\n"
+                        "pyexpat.ParserCreate().Parse('<a/>', True)")
+
+    def test_celementtree(self):
+        self.check_salt("import xml.etree.cElementTree as ET\n"
+                        "ET.fromstring('<a/>')")
+
+
 def test_main():
     run_unittest(SetAttributeTest,
                  ParseTest,
@@ -677,7 +740,9 @@ def test_main():
                  sf1296433Test,
                  ChardataBufferTest,
                  MalformedInputText,
-                 ForeignDTDTests)
+                 ForeignDTDTests,
+                 ElementDeclHandlerTest,
+                 HashSaltTest)
 
 if __name__ == "__main__":
     test_main()

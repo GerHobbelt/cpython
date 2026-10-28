@@ -444,6 +444,52 @@ text
 
 
 
+class IncrementalFeedTestCase(TestCaseBase):
+
+    def test_incremental_no_quadratic_complexity(self):
+        # An unterminated construct fed in many small chunks used to take
+        # quadratic time, both to rescan and to concatenate the buffer.
+        # Now it takes a fraction of a second.
+        test_support.requires('cpu')
+        def check(prefix, chunk, suffix):
+            parser = HTMLParser.HTMLParser()
+            parser.feed(prefix)
+            for _ in xrange(200000):
+                parser.feed(chunk)
+            parser.feed(suffix)
+            parser.close()
+        chunk = "a" * 64
+        check("<!--", chunk, "-->")       # comment
+        check("<?", chunk, ">")           # processing instruction
+        check("<!doctype ", chunk, ">")   # doctype
+        check("<![CDATA[", chunk, "]]>")  # CDATA section
+        check("<a href='", chunk, "'>")   # start tag
+        check("<script>", chunk, "</script>")  # RAWTEXT element
+
+    def test_incremental_events_preserved(self):
+        # Data fed while a construct is unterminated is still reported in
+        # full, and parsing resumes on each feed() once it makes progress.
+        source = "<p>a</p><!-- " + "x" * 1000 + " --><b>c</b>"
+        expected = [("starttag", "p", []), ("data", "a"), ("endtag", "p"),
+                    ("comment", " " + "x" * 1000 + " "),
+                    ("starttag", "b", []), ("data", "c"), ("endtag", "b")]
+        parser = EventCollector()
+        for ch in source:
+            parser.feed(ch)
+        parser.close()
+        self.assertEqual(parser.get_events(), expected)
+        # Small feeds after an unterminated construct may be held back until
+        # the buffer doubles, but close() always delivers them.
+        parser = EventCollector()
+        parser.feed("<!-- " + "y" * 100)
+        parser.feed(" -->")
+        parser.feed("<i>")
+        parser.close()
+        self.assertEqual(parser.get_events(),
+                         [("comment", " " + "y" * 100 + " "),
+                          ("starttag", "i", [])])
+
+
 class AttributesTestCase(TestCaseBase):
 
     def test_attr_syntax(self):
@@ -649,7 +695,8 @@ class AttributesTestCase(TestCaseBase):
 
 
 def test_main():
-    test_support.run_unittest(HTMLParserTestCase, AttributesTestCase)
+    test_support.run_unittest(HTMLParserTestCase, AttributesTestCase,
+                              IncrementalFeedTestCase)
 
 
 if __name__ == "__main__":

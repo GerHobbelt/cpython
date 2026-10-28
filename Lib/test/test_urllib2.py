@@ -1265,6 +1265,62 @@ class HandlerTests(unittest.TestCase):
         self.assertEqual(len(http_handler.requests), 1)
         self.assertFalse(http_handler.requests[0].has_header(auth_header))
 
+class PasswordManagerSchemeTests(unittest.TestCase):
+
+    def test_password_manager_scheme(self):
+        mgr = urllib2.HTTPPasswordMgr()
+        mgr.add_password(
+            "realm", "https://example.com/", "user", "password")
+
+        self.assertEqual(
+            mgr.find_user_password("realm", "https://example.com/"),
+            ("user", "password"))
+        self.assertEqual(
+            mgr.find_user_password("realm", "http://example.com/"),
+            (None, None))
+        # Support an authority without a scheme.
+        self.assertEqual(
+            mgr.find_user_password("realm", "example.com"),
+            ("user", "password"))
+        # An authority without a scheme continues to match any scheme.
+        mgr.add_password(
+            "realm", "schemeless.example.com", "user", "password")
+        for scheme in "http", "https":
+            self.assertEqual(
+                mgr.find_user_password(
+                    "realm", "%s://schemeless.example.com/" % scheme),
+                ("user", "password"))
+
+        # A network-path reference also has no scheme.
+        mgr.add_password(
+            "realm", "//network-path.example.com/", "user", "password")
+        self.assertEqual(
+            mgr.find_user_password(
+                "realm", "https://network-path.example.com/"),
+            ("user", "password"))
+
+    def test_password_manager_default_realm_scheme(self):
+        mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+        mgr.add_password(None, "https://example.com/", "user", "password")
+        self.assertEqual(
+            mgr.find_user_password("realm", "https://example.com/x"),
+            ("user", "password"))
+        self.assertEqual(
+            mgr.find_user_password("realm", "http://example.com/x"),
+            (None, None))
+
+    def test_password_manager_reduced_uri(self):
+        mgr = urllib2.HTTPPasswordMgr()
+
+        self.assertEqual(
+            mgr.reduce_uri("http://example.com/path"),
+            ("example.com:80", "/path"))
+        self.assertTrue(
+            mgr.is_suburi(
+                ("example.com", "/path"),
+                ("example.com", "/path/subpath")))
+
+
 class MiscTests(unittest.TestCase, FakeHTTPMixin):
 
     def test_build_opener(self):
@@ -1485,6 +1541,7 @@ def test_main(verbose=None):
              OpenerDirectorTests,
              HandlerTests,
              MiscTests,
+             PasswordManagerSchemeTests,
              RequestTests)
     test_support.run_unittest(*tests)
 

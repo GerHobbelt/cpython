@@ -1906,6 +1906,40 @@ class ElementFindTest(unittest.TestCase):
         self.assertEqual(e.find('./tag[last()-1]').attrib['class'], 'c')
         self.assertEqual(e.find('./tag[last()-2]').attrib['class'], 'b')
 
+    def test_find_xpath_index_no_quadratic_complexity(self):
+        if not isinstance(ET.Element, type):
+            self.skipTest("Element is not subclassable in this implementation")
+
+        class CountingElement(ET.Element):
+            findall_calls = 0
+            def findall(self, *args, **kwargs):
+                type(self).findall_calls += 1
+                return super(CountingElement, self).findall(*args, **kwargs)
+
+        def work(n, pattern):
+            root = CountingElement("root")
+            for _ in range(n):
+                ET.SubElement(root, "a")
+            CountingElement.findall_calls = 0
+            root.findall(pattern)
+            return CountingElement.findall_calls
+
+        for pattern in [".//a[1]", ".//a[last()]"]:
+            w1 = work(1024, pattern)
+            w2 = work(2048, pattern)
+            w3 = work(4096, pattern)
+
+            self.assertGreater(w1, 0)
+            r1 = float(w2) / w1
+            r2 = float(w3) / w2
+            # Doubling N must not ~double the parent.findall calls.
+            # Linear-in-N call counts indicate the cache is missing.
+            self.assertLess(
+                max(r1, r2), 1.5,
+                msg="Possible quadratic behavior on %r: calls=%r ratios=%r"
+                    % (pattern, (w1, w2, w3), (r1, r2)),
+            )
+
     def test_findall(self):
         e = ET.XML(SAMPLE_XML)
         e[2] = ET.XML(SAMPLE_SECTION)

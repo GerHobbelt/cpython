@@ -6,8 +6,6 @@ import unittest
 from test import test_support as support
 from test.script_helper import assert_python_ok
 import asyncore
-# import unittest.mock
-from mock import Mock
 from test import support
 import re
 import socket
@@ -3304,6 +3302,104 @@ else:
             self.assertEqual(cm.exception.reason, 'TLSV1_ALERT_INTERNAL_ERROR')
             self.assertIn("TypeError", stderr.getvalue())
 
+        def sni_handshake_released_context(self, sni_cb, ecdh_curve=None):
+            # Run a handshake over a socketpair whose server side was wrapped
+            # by a context that only the C-level SSL object references once
+            # sni_cb has switched the connection to another context.
+            # Returns (server socket, server handshake error or None,
+            # weakref to the released context).
+            def make_server(sock):
+                dispatch_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
+                dispatch_ctx.load_cert_chain(SIGNED_CERTFILE)
+                if ecdh_curve is not None:
+                    dispatch_ctx.set_ecdh_curve(ecdh_curve)
+                dispatch_ctx.set_servername_callback(sni_cb)
+                server = dispatch_ctx.wrap_socket(
+                    sock, server_side=True, do_handshake_on_connect=False)
+                return server, weakref.ref(dispatch_ctx)
+
+            s1, s2 = [socket.socket(_sock=s) for s in socket.socketpair()]
+            self.addCleanup(s1.close)
+            self.addCleanup(s2.close)
+            server, dispatch_ref = make_server(s1)
+            client_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
+            client = client_ctx.wrap_socket(s2, server_hostname='localhost',
+                                            do_handshake_on_connect=False)
+            self.addCleanup(client.close)
+            self.addCleanup(server.close)
+            client_thread = threading.Thread(target=self._quiet_handshake,
+                                             args=(client,))
+            client_thread.start()
+            error = None
+            try:
+                server.do_handshake()
+            except ssl.SSLError as e:
+                error = e
+            finally:
+                if error is not None:
+                    s1.shutdown(socket.SHUT_RDWR)
+                client_thread.join()
+            gc.collect()
+            return server, error, dispatch_ref
+
+        @staticmethod
+        def _quiet_handshake(sock):
+            try:
+                sock.do_handshake()
+            except (ssl.SSLError, socket.error):
+                pass
+
+        @needs_sni
+        def test_sni_callback_context_released_and_callback_raises(self):
+            # CVE-2026-19445: the callback switches the connection to another
+            # context, drops the last reference to the context that carries
+            # it, and raises.  The C callback must not touch that context
+            # after the Python callback returned.
+            leaf_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
+            leaf_ctx.load_cert_chain(SIGNED_CERTFILE)
+
+            def sni_cb(ssl_sock, server_name, ctx):
+                ssl_sock.context = leaf_ctx
+                del ctx
+                raise LookupError("no certificate for %r" % (server_name,))
+
+            with support.captured_stderr() as stderr:
+                server, error, dispatch_ref = \
+                    self.sni_handshake_released_context(sni_cb)
+            self.assertIsInstance(error, ssl.SSLError)
+            self.assertIn("LookupError", stderr.getvalue())
+            # The unraisable error names the callback.  Read through the
+            # freed context it was <NULL> (and writing that to a real stderr
+            # crashed).
+            self.assertIn("sni_cb", stderr.getvalue())
+            self.assertIs(server.context, leaf_ctx)
+            self.assertIsNone(dispatch_ref())
+
+        @needs_sni
+        @unittest.skipUnless(ssl.HAS_TLSv1_3, "needs TLS 1.3")
+        def test_sni_callback_context_released_before_second_client_hello(self):
+            # CVE-2026-19445: after the callback switched the connection to
+            # another context, the server forces a HelloRetryRequest (the
+            # client offers an X25519 key share first, the server accepts
+            # only P-384).  The second ClientHello must not reach the
+            # deallocated context through the original SSL_CTX.
+            leaf_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
+            leaf_ctx.load_cert_chain(SIGNED_CERTFILE)
+            calls = []
+
+            def sni_cb(ssl_sock, server_name, ctx):
+                calls.append(server_name)
+                ssl_sock.context = leaf_ctx
+
+            server, error, dispatch_ref = \
+                self.sni_handshake_released_context(sni_cb, "secp384r1")
+            self.assertIsNone(error)
+            self.assertIsNone(dispatch_ref())
+            self.assertGreaterEqual(len(calls), 1)
+            self.assertEqual(calls[0], 'localhost')
+            self.assertIs(server.context, leaf_ctx)
+            self.assertIsNotNone(server.cipher())
+
         def test_read_write_after_close_raises_valuerror(self):
             context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
             context.verify_mode = ssl.CERT_REQUIRED
@@ -3479,8 +3575,8 @@ class TestSSLDebug(unittest.TestCase):
                      "test is not compatible with ignore_environment")
     def test_keylog_env(self):
         self.addCleanup(support.unlink, support.TESTFN)
-        with mock.patch.dict(os.environ):
-            os.environ['SSLKEYLOGFILE'] = support.TESTFN
+        with support.EnvironmentVarGuard() as env:
+            env['SSLKEYLOGFILE'] = support.TESTFN
             self.assertEqual(os.environ['SSLKEYLOGFILE'], support.TESTFN)
 
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)
