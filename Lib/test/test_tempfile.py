@@ -1583,7 +1583,9 @@ class TestTemporaryDirectory(BaseTestCase):
                     os.unlink(dir1)
                     os.rename(dir1 + '_moved', dir1)
                 os.chmod(dir1, 0o700)
-                d1.cleanup()
+                # The failed cleanup() above already detached the finalizer,
+                # and 3.9's cleanup() does nothing once it is detached.
+                d1._rmtree(d1.name)
 
             self.assertTrue(os.path.exists(target_file))
             self.assertEqual(os.stat(target_file).st_mode, target_mode)
