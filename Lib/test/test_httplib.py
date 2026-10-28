@@ -677,6 +677,30 @@ class BasicTest(TestCase):
         resp = httplib.HTTPResponse(FakeSocket(body))
         self.assertRaises(httplib.LineTooLong, resp.begin)
 
+    def test_overflowing_header_limit_after_100(self):
+        # CVE-2021-3737: the headers of a 100 Continue response used to be
+        # skipped without any limit on their number.
+        body = (
+            'HTTP/1.1 100 OK\r\n'
+            + 'r\n' * 32768
+            + '\r\nHTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body))
+        with self.assertRaisesRegexp(httplib.HTTPException,
+                                     "got more than 100 headers"):
+            resp.begin()
+
+    def test_headers_after_100(self):
+        # A 100 Continue response with a few headers is still skipped.
+        body = (
+            'HTTP/1.1 100 Continue\r\nX-A: 1\r\nX-B: 2\r\n\r\n'
+            'HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nHello'
+        )
+        resp = httplib.HTTPResponse(FakeSocket(body))
+        resp.begin()
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(resp.read(), 'Hello')
+
     def test_overflowing_chunked_line(self):
         body = (
             'HTTP/1.1 200 OK\r\n'
