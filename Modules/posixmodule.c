@@ -278,6 +278,7 @@ extern int lstat(const char *, struct stat *);
 #include <malloc.h>
 #include <windows.h>
 #include <shellapi.h>   /* for ShellExecute() */
+#include <sddl.h>       /* for ConvertStringSecurityDescriptorToSecurityDescriptorW() */
 #define popen   _popen
 #define pclose  _pclose
 #endif /* _MSC_VER */
@@ -2564,7 +2565,52 @@ posix__getfullpathname(PyObject *self, PyObject *args)
 
 PyDoc_STRVAR(posix_mkdir__doc__,
 "mkdir(path [, mode=0777])\n\n\
-Create a directory.");
+Create a directory.\n\
+\n\
+On Windows, a mode of 0700 is specifically handled to apply access control\n\
+to the new directory such that only the current user and administrators\n\
+have access. Other values of mode are ignored.");
+
+#ifdef MS_WINDOWS
+/* gh-118486 (CVE-2024-4030): for mode 0700, build a security descriptor
+   whose protected discretionary ACL (D:P) only has inheritable (OICI)
+   full-control (FA) entries for SYSTEM (SY), Administrators (BA) and the
+   owner (OW).  Returns 0 or a Windows error code.  On success with mode
+   0700, *pSecAttr points to secAttr and secAttr->lpSecurityDescriptor
+   must be released with LocalFree(). */
+static DWORD
+win32_mkdir_security(int mode, SECURITY_ATTRIBUTES *secAttr,
+                     SECURITY_ATTRIBUTES **pSecAttr)
+{
+    ULONG sdSize;
+
+    ZeroMemory(secAttr, sizeof(*secAttr));
+    secAttr->nLength = sizeof(*secAttr);
+    *pSecAttr = NULL;
+    if (mode != 0700)
+        return 0;
+    if (!ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            L"D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)",
+            SDDL_REVISION_1,
+            &secAttr->lpSecurityDescriptor,
+            &sdSize))
+        return GetLastError();
+    *pSecAttr = secAttr;
+    return 0;
+}
+
+/* Release the descriptor from win32_mkdir_security().  Returns 0 or a
+   Windows error code; uncommonly, LocalFree() returns non-NULL on error
+   and reports the error code through GetLastError(). */
+static DWORD
+win32_mkdir_security_free(SECURITY_ATTRIBUTES *secAttr)
+{
+    if (secAttr->lpSecurityDescriptor &&
+        LocalFree(secAttr->lpSecurityDescriptor))
+        return GetLastError();
+    return 0;
+}
+#endif /* MS_WINDOWS */
 
 static PyObject *
 posix_mkdir(PyObject *self, PyObject *args)
@@ -2575,10 +2621,21 @@ posix_mkdir(PyObject *self, PyObject *args)
 
 #ifdef MS_WINDOWS
     Py_UNICODE *wpath;
+    DWORD error;
+    SECURITY_ATTRIBUTES secAttr;
+    SECURITY_ATTRIBUTES *pSecAttr;
+
     if (PyArg_ParseTuple(args, "u|i:mkdir", &wpath, &mode)) {
+        res = 0;
         Py_BEGIN_ALLOW_THREADS
-        res = CreateDirectoryW(wpath, NULL);
+        error = win32_mkdir_security(mode, &secAttr, &pSecAttr);
+        if (!error) {
+            res = CreateDirectoryW(wpath, pSecAttr);
+            error = win32_mkdir_security_free(&secAttr);
+        }
         Py_END_ALLOW_THREADS
+        if (error)
+            return PyErr_SetFromWindowsErr(error);
         if (!res)
             return win32_error_unicode("mkdir", wpath);
         Py_INCREF(Py_None);
@@ -2590,9 +2647,19 @@ posix_mkdir(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "et|i:mkdir",
                           Py_FileSystemDefaultEncoding, &path, &mode))
         return NULL;
+    res = 0;
     Py_BEGIN_ALLOW_THREADS
-    res = CreateDirectoryA(path, NULL);
+    error = win32_mkdir_security(mode, &secAttr, &pSecAttr);
+    if (!error) {
+        res = CreateDirectoryA(path, pSecAttr);
+        error = win32_mkdir_security_free(&secAttr);
+    }
     Py_END_ALLOW_THREADS
+    if (error) {
+        PyErr_SetFromWindowsErr(error);
+        PyMem_Free(path);
+        return NULL;
+    }
     if (!res) {
         win32_error("mkdir", path);
         PyMem_Free(path);

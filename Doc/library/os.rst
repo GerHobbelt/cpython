@@ -1233,10 +1233,17 @@ Files and Directories
    platform-dependent.  On some platforms, they are ignored and you should call
    :func:`chmod` explicitly to set them.
 
+   On Windows, a *mode* of ``0700`` is specifically handled to apply access
+   control to the new directory such that only the current user and
+   administrators have access. Other values of *mode* are ignored.
+
    It is also possible to create temporary directories; see the
    :mod:`tempfile` module's :func:`tempfile.mkdtemp` function.
 
    Availability: Unix, Windows.
+
+   .. versionchanged:: 2.7.18.16
+      Windows now handles a *mode* of ``0700``.
 
 
 .. function:: makedirs(path[, mode])
