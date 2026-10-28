@@ -29,6 +29,10 @@ Upgrade the pip and setuptools bundled with ensurepip
 :mod:`ensurepip` now bundles pip 20.3.4.post3 and setuptools 44.1.1.post3,
 the ActiveState security releases of the last Python 2.7-compatible pip and
 setuptools lines, in place of pip 19.2.3 and setuptools 41.2.0. pip's
-vendored certifi is 2026.10.19.post1, which no longer trusts the eMudhra/emSign
-roots (CVE-2026-115557). setuptools 44.1.1.post3 includes the fixes for
+vendored certifi is 2026.10.19.post1, which, like upstream certifi
+2026.10.19, removes only the emSign ECC Root CA - G3 root; emSign Root CA -
+G1, emSign Root CA - C1 and emSign ECC Root CA - C3 are still trusted. pip's
+connections go through the :mod:`ssl` module, so the eMudhra SPKI denylist
+above also applies to them (CVE-2026-115557). setuptools 44.1.1.post3
+includes the fixes for
 CVE-2022-40897, CVE-2024-6345, CVE-2025-47273 and CVE-2026-59890.
