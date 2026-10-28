@@ -2413,6 +2413,11 @@ context_dealloc(PySSLContext *self)
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(self);
     context_clear(self);
+#if HAVE_SNI && !defined(OPENSSL_NO_TLSEXT)
+    /* The SSL_CTX may outlive this object as the session_ctx of sockets that
+       were switched to another context; leave no Python callback behind. */
+    SSL_CTX_set_tlsext_servername_callback(self->ctx, NULL);
+#endif
     SSL_CTX_free(self->ctx);
 #if HAVE_NPN
     PyMem_FREE(self->npn_protocols);
@@ -3430,29 +3435,42 @@ static int
 _servername_callback(SSL *s, int *al, void *args)
 {
     int ret;
-    PySSLContext *ssl_ctx = (PySSLContext *) args;
+    PySSLContext *ssl_ctx;
     PySSLSocket *ssl;
     PyObject *servername_o;
     PyObject *servername_idna;
     PyObject *result;
     /* The high-level ssl.SSLSocket object */
     PyObject *ssl_socket;
+    PyObject *sni_cb;
     const char *servername = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
 #ifdef WITH_THREAD
     PyGILState_STATE gstate = PyGILState_Ensure();
 #endif
 
-    if (ssl_ctx->set_hostname == NULL) {
-        /* remove race condition in this the call back while if removing the
-         * callback is in progress */
+    /* Do not use the SSL_CTX's servername arg to find the context: it is a
+       borrowed pointer to whichever _SSLContext installed the callback, and
+       that object may already be gone while OpenSSL still reaches this
+       callback through the connection's session_ctx (e.g. on the second
+       ClientHello after a HelloRetryRequest, once the callback has switched
+       the socket to another context).  The socket's current context is
+       always alive; hold strong references to it and to the callback while
+       they are used here. */
+    (void)args;
+    ssl = SSL_get_app_data(s);
+    assert(ssl != NULL && PySSLSocket_Check(ssl));
+    ssl_ctx = ssl->ctx;
+    Py_INCREF(ssl_ctx);
+    sni_cb = ssl_ctx->set_hostname;
+    if (sni_cb == NULL) {
+        Py_DECREF(ssl_ctx);
 #ifdef WITH_THREAD
         PyGILState_Release(gstate);
 #endif
         return SSL_TLSEXT_ERR_OK;
     }
+    Py_INCREF(sni_cb);
 
-    ssl = SSL_get_app_data(s);
-    assert(PySSLSocket_Check(ssl));
     if (ssl->ssl_sock == NULL) {
         ssl_socket = Py_None;
     } else {
@@ -3464,7 +3482,7 @@ _servername_callback(SSL *s, int *al, void *args)
     }
 
     if (servername == NULL) {
-        result = PyObject_CallFunctionObjArgs(ssl_ctx->set_hostname, ssl_socket,
+        result = PyObject_CallFunctionObjArgs(sni_cb, ssl_socket,
                                               Py_None, ssl_ctx, NULL);
     }
     else {
@@ -3480,14 +3498,14 @@ _servername_callback(SSL *s, int *al, void *args)
             goto error;
         }
         Py_DECREF(servername_o);
-        result = PyObject_CallFunctionObjArgs(ssl_ctx->set_hostname, ssl_socket,
+        result = PyObject_CallFunctionObjArgs(sni_cb, ssl_socket,
                                               servername_idna, ssl_ctx, NULL);
         Py_DECREF(servername_idna);
     }
     Py_DECREF(ssl_socket);
 
     if (result == NULL) {
-        PyErr_WriteUnraisable(ssl_ctx->set_hostname);
+        PyErr_WriteUnraisable(sni_cb);
         *al = SSL_AD_HANDSHAKE_FAILURE;
         ret = SSL_TLSEXT_ERR_ALERT_FATAL;
     }
@@ -3506,6 +3524,8 @@ _servername_callback(SSL *s, int *al, void *args)
         Py_DECREF(result);
     }
 
+    Py_DECREF(sni_cb);
+    Py_DECREF(ssl_ctx);
 #ifdef WITH_THREAD
     PyGILState_Release(gstate);
 #endif
@@ -3513,6 +3533,8 @@ _servername_callback(SSL *s, int *al, void *args)
 
 error:
     Py_DECREF(ssl_socket);
+    Py_DECREF(sni_cb);
+    Py_DECREF(ssl_ctx);
     *al = SSL_AD_INTERNAL_ERROR;
     ret = SSL_TLSEXT_ERR_ALERT_FATAL;
 #ifdef WITH_THREAD
@@ -3555,7 +3577,6 @@ set_servername_callback(PySSLContext *self, PyObject *args)
         Py_INCREF(cb);
         self->set_hostname = cb;
         SSL_CTX_set_tlsext_servername_callback(self->ctx, _servername_callback);
-        SSL_CTX_set_tlsext_servername_arg(self->ctx, self);
     }
     Py_RETURN_NONE;
 #else
