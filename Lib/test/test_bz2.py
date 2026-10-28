@@ -45,6 +45,16 @@ class BaseTest(unittest.TestCase):
             return bz2.decompress(data)
 
 
+# gh-150599: a crafted stream on which BZ2_bzDecompress() fails with
+# BZ_DATA_ERROR; calling it again on the same stream could write out of
+# bounds.
+DATA_ERROR_STREAM = binascii.unhexlify(
+    "425a6839314159265359000000000000007fffff000000000000000000000000"
+    "00000000000000000000000000000000000000e0370000000000000000000000"
+    "000000000000000000000000000000000000000000000000000083f3"
+)
+
+
 class BZ2FileTest(BaseTest):
     "Test BZ2File type miscellaneous methods."
 
@@ -338,6 +348,28 @@ class BZ2FileTest(BaseTest):
         self.assertRaises(IOError, f.__init__, "non-existent-file")
         del f
 
+    def test_read_after_data_error(self):
+        # gh-150599: BZ2File reads with BZ2_bzRead(), which re-enters
+        # BZ2_bzDecompress() on the same stream; after a data error the
+        # file refuses further reads until a seek() reopens the stream.
+        with open(self.filename, "wb") as f:
+            f.write(DATA_ERROR_STREAM + b"\x00" * 4000)
+        def readers(bz2f):
+            return [bz2f.read, lambda: bz2f.read(10), bz2f.readline,
+                    bz2f.readlines, lambda: next(iter(bz2f))]
+        for i in range(5):
+            with BZ2File(self.filename) as bz2f:
+                with self.assertRaisesRegexp(IOError, "invalid data stream"):
+                    bz2f.read()
+                with self.assertRaisesRegexp(ValueError, "previous error"):
+                    readers(bz2f)[i]()
+                # seek() starts over from a new stream, which fails again.
+                for offset, whence in ((0, 0), (10, 0), (0, 2)):
+                    with self.assertRaisesRegexp(IOError,
+                                                 "invalid data stream"):
+                        bz2f.seek(offset, whence)
+                        bz2f.read()
+
 class BZ2CompressorTest(BaseTest):
     def testCompress(self):
         # "Test BZ2Compressor.compress()/flush()"
@@ -421,14 +453,9 @@ class BZ2DecompressorTest(BaseTest):
     def test_decompress_after_data_error(self):
         # gh-150599: re-entering BZ2_bzDecompress() after an error could
         # write out of bounds; the decompressor is now unusable instead.
-        data = binascii.unhexlify(
-            "425a6839314159265359000000000000007fffff000000000000000000000000"
-            "00000000000000000000000000000000000000e0370000000000000000000000"
-            "000000000000000000000000000000000000000000000000000083f3"
-        )
         bzd = BZ2Decompressor()
         with self.assertRaisesRegexp(IOError, "invalid data stream"):
-            bzd.decompress(data)
+            bzd.decompress(DATA_ERROR_STREAM)
         with self.assertRaisesRegexp(ValueError, "previous error"):
             bzd.decompress(b'\x00' * 18)
 
