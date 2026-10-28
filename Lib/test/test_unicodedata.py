@@ -204,6 +204,44 @@ class UnicodeFunctionsTest(UnicodeDatabaseTest):
         b = u'C\u0338' * 20  + u'\xC7'
         self.assertEqual(self.db.normalize('NFC', a), b)
 
+    def test_long_combining_mark_run(self):
+        # gh-149079 (CVE-2026-3276): avoid quadratic canonical ordering.
+        payload = u"a" + (u"\u0300\u0327" * 32)
+        nfd = u"a" + (u"\u0327" * 32) + (u"\u0300" * 32)
+        nfc = u"\u00e0" + (u"\u0327" * 32) + (u"\u0300" * 31)
+
+        self.assertEqual(self.db.normalize("NFD", payload), nfd)
+        self.assertEqual(self.db.normalize("NFKD", payload), nfd)
+        self.assertEqual(self.db.normalize("NFC", payload), nfc)
+        self.assertEqual(self.db.normalize("NFKC", payload), nfc)
+
+    def test_combining_mark_run_fast_paths(self):
+        # gh-149079: cover short runs and already-sorted long runs.
+        short_payload = u"a" + (u"\u0300\u0327" * 9) + u"\u0300"
+        short_nfd = u"a" + (u"\u0327" * 9) + (u"\u0300" * 10)
+        short_nfc = u"\u00e0" + (u"\u0327" * 9) + (u"\u0300" * 9)
+        long_sorted = u"a" + (u"\u0327" * 30) + (u"\u0300" * 30)
+        long_sorted_nfc = u"\u00e0" + (u"\u0327" * 30) + (u"\u0300" * 29)
+
+        self.assertEqual(self.db.normalize("NFD", short_payload), short_nfd)
+        self.assertEqual(self.db.normalize("NFKD", short_payload), short_nfd)
+        self.assertEqual(self.db.normalize("NFC", short_payload), short_nfc)
+        self.assertEqual(self.db.normalize("NFKC", short_payload), short_nfc)
+        self.assertEqual(self.db.normalize("NFD", long_sorted), long_sorted)
+        self.assertEqual(self.db.normalize("NFKD", long_sorted), long_sorted)
+        self.assertEqual(self.db.normalize("NFC", long_sorted), long_sorted_nfc)
+        self.assertEqual(self.db.normalize("NFKC", long_sorted), long_sorted_nfc)
+
+    def test_combining_mark_run_is_linear(self):
+        # gh-149079 (CVE-2026-3276): a run of 100000 combining marks in
+        # alternating canonical combining class order took about 1.5 s with
+        # the quadratic sort (and 20 s for 400000); it now takes a few
+        # milliseconds.  This checks the counting sort on a long run.
+        n = 50000
+        payload = u"a" + (u"\u0300\u0327" * n)
+        nfd = u"a" + (u"\u0327" * n) + (u"\u0300" * n)
+        self.assertEqual(self.db.normalize("NFD", payload), nfd)
+
     def test_issue29456(self):
         # Fix #29456
         u1176_str_a = u'\u1100\u1176\u11a8'
