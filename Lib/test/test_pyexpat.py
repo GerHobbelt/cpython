@@ -678,6 +678,30 @@ class ForeignDTDTests(unittest.TestCase):
         self.assertEqual(handler_call_args, [("bar", "baz")])
 
 
+@unittest.skipIf(expat.version_info < (2, 8, 0),
+                 "XML_SetHashSalt16Bytes needs expat >= 2.8.0")
+class HashSaltTest(unittest.TestCase):
+    # gh-149018 (CVE-2026-7210): parsers get 16 bytes of OS entropy as their
+    # hash salt instead of the 0 from _Py_HashSecret (without -R), which made
+    # expat fall back to its own time-based salt.  EXPAT_ENTROPY_DEBUG makes
+    # expat report on stderr where each parser's salt came from.
+    def check_salt(self, code):
+        from test.script_helper import assert_python_ok
+        rc, out, err = assert_python_ok('-c', code, EXPAT_ENTROPY_DEBUG='1')
+        lines = [l for l in err.splitlines() if l.startswith('expat: Entropy')]
+        self.assertTrue(lines, err)
+        for line in lines:
+            self.assertIn('explicit(16)', line)
+
+    def test_pyexpat(self):
+        self.check_salt("import pyexpat\n"
+                        "pyexpat.ParserCreate().Parse('<a/>', True)")
+
+    def test_celementtree(self):
+        self.check_salt("import xml.etree.cElementTree as ET\n"
+                        "ET.fromstring('<a/>')")
+
+
 def test_main():
     run_unittest(SetAttributeTest,
                  ParseTest,
@@ -689,7 +713,8 @@ def test_main():
                  sf1296433Test,
                  ChardataBufferTest,
                  MalformedInputText,
-                 ForeignDTDTests)
+                 ForeignDTDTests,
+                 HashSaltTest)
 
 if __name__ == "__main__":
     test_main()

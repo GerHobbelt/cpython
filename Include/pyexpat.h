@@ -45,6 +45,9 @@ struct PyExpat_CAPI
     void (*SetUserData)(XML_Parser parser, void *userData);
     /* might be none for expat < 2.1.0 */
     int (*SetHashSalt)(XML_Parser parser, unsigned long hash_salt);
+    /* might be NULL for expat < 2.8.0 */
+    XML_Bool (*SetHashSalt16Bytes)(
+        XML_Parser parser, const uint8_t entropy[16]);
     /* always add new stuff to the end! */
 };
 
