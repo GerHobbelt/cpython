@@ -879,7 +879,8 @@ class PyBuildExt(build_ext):
                                    include_dirs = ssl_incs,
                                    library_dirs = ssl_libs,
                                    libraries = ['ssl', 'crypto'],
-                                   depends = ['socketmodule.h']), )
+                                   depends = ['socketmodule.h',
+                                              '_ssl_distrusted_spki.h']), )
         else:
             missing.append('_ssl')
 
