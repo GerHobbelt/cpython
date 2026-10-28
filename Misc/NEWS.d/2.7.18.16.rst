@@ -1,0 +1,258 @@
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0116
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix a hang in tarfile streaming mode (CVE-2026-11972)
+
+Seeking forward in a :mod:`tarfile` stream opened in ``r|`` mode stopped
+only at the target offset, so a member header declaring a huge size made it
+loop forever at end of file. It now stops at EOF and raises
+:exc:`tarfile.ReadError` ("unexpected end of data").
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0216
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix quadratic time in csv.Sniffer on quoted fields (CVE-2026-18503)
+
+The regular expression :class:`csv.Sniffer` uses to guess the quote character
+backtracked quadratically on long quoted fields. Python 2.7's :mod:`re` has
+no possessive quantifiers, so the upstream fix is expressed with an
+equivalent lookahead and backreference.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0316
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+ftplib.ftpcp() no longer trusts the host in a PASV reply (CVE-2026-8328)
+
+:func:`ftplib.ftpcp` connected the target server to the host address given
+in the source server's ``PASV`` reply, letting a malicious server direct the
+transfer to another host. It now uses the source server's actual peer
+address, as :class:`ftplib.FTP` already does for its own transfers.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0416
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Reject malformed Content-Length and chunk sizes in httplib (CVE-2026-103995)
+
+:mod:`httplib` now accepts only decimal digits (with optional surrounding
+whitespace) in ``Content-Length``, and only hexadecimal digits for a chunk
+size. Values such as ``+5``, ``-0`` or ``0x10``, which other HTTP
+implementations parse differently, are rejected or ignored instead of being
+used.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0516
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Limit what httplib reads around interim responses and trailers (CVE-2021-3737)
+
+:class:`httplib.HTTPResponse` now reads at most 100 header lines inside a
+``100 Continue`` response, skips at most 100 interim (1xx) responses, and
+discards at most 100 trailer lines after a chunked body
+(GHSA-w4q2-g22w-6fr4). Each limit raises :exc:`httplib.HTTPException` when
+exceeded, instead of reading for as long as the server keeps sending.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0616
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix an open redirect in SimpleHTTPServer (CVE-2021-28861)
+
+A request path starting with ``//`` could make
+:class:`SimpleHTTPServer.SimpleHTTPRequestHandler` redirect to another
+host (``Location: //evil.example/...``). Leading slashes are now collapsed
+before the path is used.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0716
+.. release date: 2026-10-28
+.. original section: Windows
+.. section: Security
+
+mimetypes no longer reads files from fixed paths on Windows (CVE-2024-3220)
+
+On Windows, :mod:`mimetypes` no longer reads the Unix ``knownfiles`` paths
+(such as ``C:\etc\mime.types``), which any local user may be able to
+create. The registry is still used.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0816
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix a crash in pyexpat on deeply nested content models (CVE-2026-4224)
+
+Converting a deeply nested DTD content model for an ``ElementDeclHandler``
+recursed without limit in C and could overflow the stack. It now raises
+:exc:`RuntimeError` when the recursion limit is reached.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as0916
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+bz2 objects can no longer be reused after a data error (CVE-2026-9669)
+
+Calling into libbz2 again after it reported an error could write out of
+bounds. :class:`bz2.BZ2Decompressor` and, for reading, :class:`bz2.BZ2File`
+now raise :exc:`ValueError` once an error has occurred. Seeking a
+:class:`bz2.BZ2File` starts over from a newly opened stream.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1016
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix quadratic time in ElementPath index predicates (CVE-2026-6879)
+
+``[1]``, ``[last()]`` and similar index predicates in
+:mod:`xml.etree.ElementTree` path expressions re-scanned the parent for every
+element, which was quadratic in the number of siblings. Results are now
+computed once per parent.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1116
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+urllib2 password managers no longer send https credentials over http (CVE-2026-15806)
+
+Credentials added to :class:`urllib2.HTTPPasswordMgr` for an ``https`` URL
+were also returned for the same host over ``http``. The URL scheme is now
+part of the match; an entry given without a scheme still matches any
+scheme.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1216
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix quadratic time in HTMLParser incremental parsing (CVE-2026-15308)
+
+:class:`HTMLParser.HTMLParser` copied its whole buffer on every
+:meth:`~HTMLParser.HTMLParser.feed` call while a construct was still open,
+so feeding a document in small pieces was quadratic. Data is now buffered
+until it can be parsed. As upstream, events after such a construct may be
+reported later, but none are lost.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1316
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Update the bundled Expat to 2.9.0
+
+The Expat in ``Modules/expat`` is updated from 2.6.4 to 2.9.0, fixing
+CVE-2024-8176, CVE-2025-59375, CVE-2026-24515, CVE-2026-25210,
+CVE-2026-32776, CVE-2026-32777, CVE-2026-32778, CVE-2026-41080,
+CVE-2026-45186, CVE-2026-50219, CVE-2026-56131, CVE-2026-56132,
+CVE-2026-56403 to CVE-2026-56412, CVE-2026-66046, CVE-2026-72522,
+CVE-2026-76641, CVE-2026-76956, CVE-2026-76957, CVE-2026-77214,
+CVE-2026-93990 and CVE-2026-102633. On Windows, :mod:`pyexpat` links the
+external Expat library, which should be 2.9.0 as well.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1416
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Give Expat parsers a random 16-byte hash salt (CVE-2026-7210)
+
+:mod:`pyexpat` and :mod:`xml.etree.cElementTree` now seed every parser's
+hash-flooding protection with 16 bytes from the operating system's random
+source (``XML_SetHashSalt16Bytes``), instead of a value that is zero unless
+hash randomization is enabled, which made Expat fall back to a weak
+time-based salt. Requires Expat 2.8.0 or later.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1516
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix a use-after-free in the ssl SNI callback (CVE-2026-19445)
+
+A servername callback that switched the connection to another
+:class:`ssl.SSLContext` while the original context was released could make
+the next callback read freed memory and crash the server. The callback now
+finds its context through the connection and keeps it alive while in use.
+After a switch, later ClientHello messages go to the new context's
+callback.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1616
+.. release date: 2026-10-28
+.. original section: Library
+.. section: Security
+
+Fix quadratic time in unicodedata.normalize() (CVE-2026-3276)
+
+Canonical ordering of a long run of combining characters in alternating
+order was quadratic. Each run is now sorted separately, with a linear
+counting sort for long runs. The results are unchanged.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1716
+.. release date: 2026-10-28
+.. original section: Windows
+.. section: Security
+
+os.mkdir(path, 0700) restricts access on Windows (CVE-2024-4030)
+
+On Windows, :func:`os.mkdir` ignored its *mode*, so directories created by
+:func:`tempfile.mkdtemp` were readable by other users. A mode of ``0700``
+now creates the directory with an access control list that allows only
+SYSTEM, Administrators and the owner. Other modes are still ignored.
+
+.. bpo: 0
+.. date: 2026-10-28
+.. nonce: as1816
+.. release date: 2026-10-28
+.. original section: Build
+.. section: Build
+
+Fix building _socket without optimization
+
+Removed an unused function from ``Modules/socketmodule.c`` that referenced
+a symbol Python 2.7 does not build, so ``-O0`` and ``--with-pydebug`` builds
+produced a ``_socket`` module (and :mod:`ssl`) that failed to import.
+``test_ssl`` no longer needs the third-party ``mock`` package.
