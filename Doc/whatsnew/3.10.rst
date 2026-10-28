@@ -2456,11 +2456,15 @@ ssl
 ensurepip
 ---------
 
-* The bundled ``pip`` is upgraded from 23.0.1 to 26.2.2.  pip loads its
-  own vendored ``certifi`` CA bundle in addition to the system trust store,
-  and the bundle in pip 23.0.1 still trusts the compromised eMudhra emSign
-  root; pip 26.2.2 ships certifi 2026.10.19, which removes it.
-  (:gh:`159894`)
+* The bundled ``pip`` is upgraded from 23.0.1 to 26.0.1.post2, the
+  ActiveState security release of pip 26.0.1 (the same pip bundled with
+  3.9.25.1).  pip loads its own vendored ``certifi`` CA bundle in addition to
+  the system trust store, and the bundle in pip 23.0.1 still trusts the
+  compromised eMudhra/emSign roots.  The bundle in 26.0.1.post2 (certifi
+  2026.10.23) drops the emSign ECC Root CA - G3, emSign Root CA - C1 and
+  emSign ECC Root CA - C3 roots, leaving emSign Root CA - G1 as the only
+  emSign root.  The release also patches CVE-2026-3219, CVE-2026-6357,
+  CVE-2026-8643 and CVE-2026-13346.  (:gh:`159894`)
 * The bundled ``setuptools`` is upgraded from 79.0.1 to 84.2.1, fixing
   CVE 2026-59890 and GHSA-xmj3-9gf7-h52w.  setuptools removed
   ``pkg_resources`` in 82.0.0, so environments seeded by :mod:`ensurepip` or

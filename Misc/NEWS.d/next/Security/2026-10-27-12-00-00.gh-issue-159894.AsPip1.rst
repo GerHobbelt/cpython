@@ -1,3 +1,7 @@
-Upgrade the bundled pip in :mod:`ensurepip` to 26.2.2, which no longer trusts
-the compromised eMudhra emSign CA (the pip 23.0.1 it replaces ships a
-vendored certifi that still trusts it).
+Upgrade the bundled pip in :mod:`ensurepip` to the ActiveState security
+release 26.0.1.post2. Its vendored certifi 2026.10.23 drops the emSign ECC
+Root CA - G3, emSign Root CA - C1 and emSign ECC Root CA - C3 roots of the
+compromised eMudhra/emSign CA (GHSA-6q48-6c7w-9gw2); emSign Root CA - G1 is the
+only emSign root left. The pip 23.0.1 it replaces ships a vendored certifi
+that still trusts all four. It also patches CVE-2026-3219, CVE-2026-6357,
+CVE-2026-8643 and CVE-2026-13346.
