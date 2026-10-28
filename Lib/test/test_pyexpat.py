@@ -666,6 +666,33 @@ class ForeignDTDTests(unittest.TestCase):
         self.assertEqual(handler_call_args, [("bar", "baz")])
 
 
+class ElementDeclHandlerTest(unittest.TestCase):
+    def test_deeply_nested_content_model(self):
+        # This should raise a RuntimeError (recursion limit) and not crash.
+        # See https://github.com/python/cpython/issues/145986.
+        N = 500000
+        data = (
+            '<!DOCTYPE root [\n<!ELEMENT root '
+            + '(a, ' * N + 'a' + ')' * N
+            + '>\n]>\n<root/>\n'
+        )
+
+        parser = expat.ParserCreate()
+        parser.ElementDeclHandler = lambda _1, _2: None
+        with self.assertRaises(RuntimeError):
+            parser.Parse(data, True)
+
+    def test_nested_content_model(self):
+        # A modestly nested content model is still converted.
+        models = []
+        parser = expat.ParserCreate()
+        parser.ElementDeclHandler = lambda name, model: models.append(model)
+        parser.Parse('<!DOCTYPE root [\n<!ELEMENT root ((a, b), c)>\n'
+                     '<!ELEMENT a EMPTY>\n]>\n<root/>\n', True)
+        self.assertEqual(len(models), 2)
+        self.assertEqual(len(models[0][3]), 2)
+
+
 def test_main():
     run_unittest(SetAttributeTest,
                  ParseTest,
@@ -677,7 +704,8 @@ def test_main():
                  sf1296433Test,
                  ChardataBufferTest,
                  MalformedInputText,
-                 ForeignDTDTests)
+                 ForeignDTDTests,
+                 ElementDeclHandlerTest)
 
 if __name__ == "__main__":
     test_main()
