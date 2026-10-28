@@ -980,10 +980,67 @@ class TestTimeouts(TestCase):
         ftp.close()
 
 
+class TestFtpcpSecurity(TestCase):
+    """ftpcp() must not trust the host a source server advertises in PASV.
+
+    A malicious source server can otherwise redirect the target server's
+    data connection to an arbitrary host:port (SSRF), so ftpcp() uses the
+    source server's actual peer address instead, the same as FTP.makepasv().
+    """
+
+    class _FakeSock:
+        def __init__(self, peer):
+            self.peer = peer
+
+        def getpeername(self):
+            return self.peer
+
+    class _FakeFTP:
+        def __init__(self, replies, peer=None, trust=False):
+            self.replies = replies
+            self.sock = TestFtpcpSecurity._FakeSock(peer)
+            self.trust_server_pasv_ipv4_address = trust
+            self.sendport_calls = []
+
+        def voidcmd(self, cmd):
+            return '200 ok'
+
+        def voidresp(self):
+            return '226 ok'
+
+        def sendcmd(self, cmd):
+            return self.replies.get(cmd.split()[0], '150 ok')
+
+        def sendport(self, host, port):
+            self.sendport_calls.append((host, port))
+
+    def _make_pair(self, advertised_host, real_host, trust=False):
+        # PASV replies give the host as comma-separated octets, not dotted.
+        advertised = advertised_host.replace('.', ',')
+        source = self._FakeFTP(
+            {'PASV': '227 Entering Passive Mode (%s,1,2).' % advertised},
+            peer=(real_host, 21), trust=trust)
+        target = self._FakeFTP({})
+        return source, target
+
+    def test_ftpcp_ignores_untrusted_pasv_host(self):
+        source, target = self._make_pair(advertised_host='10.0.0.5',
+                                         real_host='198.51.100.7')
+        ftplib.ftpcp(source, 'a', target, 'b')
+        self.assertEqual(target.sendport_calls, [('198.51.100.7', 258)])
+
+    def test_ftpcp_trust_server_pasv_ipv4_address(self):
+        source, target = self._make_pair(advertised_host='10.0.0.5',
+                                         real_host='198.51.100.7', trust=True)
+        ftplib.ftpcp(source, 'a', target, 'b')
+        self.assertEqual(target.sendport_calls, [('10.0.0.5', 258)])
+
+
 def test_main():
     tests = [TestFTPClass, TestTimeouts,
              TestIPv6Environment,
-             TestTLS_FTPClassMixin, TestTLS_FTPClass]
+             TestTLS_FTPClassMixin, TestTLS_FTPClass,
+             TestFtpcpSecurity]
 
     thread_info = test_support.threading_setup()
     try:
