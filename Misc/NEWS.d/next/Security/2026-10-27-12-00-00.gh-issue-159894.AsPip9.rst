@@ -1,6 +1,9 @@
 Upgrade the bundled pip in :mod:`ensurepip` to the ActiveState security
-release 26.0.1.post2 (the last pip that supports Python 3.9). Its vendored
+release 26.0.1.post3 (the last pip that supports Python 3.9). Its vendored
 certifi 2026.10.23 drops the emSign ECC Root CA - G3, emSign Root CA - C1 and
 emSign ECC Root CA - C3 roots of the compromised eMudhra/emSign CA
 (GHSA-6q48-6c7w-9gw2); emSign Root CA - G1 is the only emSign root left. It
-also patches CVE-2026-3219, CVE-2026-6357, CVE-2026-8643 and CVE-2026-13346.
+also patches CVE-2026-3219, CVE-2026-6357, CVE-2026-8643 and CVE-2026-13346,
+and vendors ActiveState's urllib3 1.26.20.post4, which fixes CVE-2025-50181,
+CVE-2025-66418, CVE-2025-66471, CVE-2026-21441, CVE-2026-44431,
+CVE-2026-97687 and CVE-2026-97689.
