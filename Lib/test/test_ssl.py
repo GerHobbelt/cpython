@@ -20,7 +20,9 @@ import os
 import errno
 import pprint
 import shutil
+import tempfile
 import urllib2
+import zipfile
 import traceback
 import weakref
 import platform
@@ -79,6 +81,19 @@ BADKEY = data_file("badkey.pem")
 NOKIACERT = data_file("nokia.pem")
 NULLBYTECERT = data_file("nullbytecert.pem")
 TALOS_INVALID_CRLDP = data_file("talos-2019-0758.pem")
+
+# gh-160040: a leaf signed by a compromised eMudhra intermediate whose public
+# key is on the _ssl distrusted list. The chain to distrusted_root.pem is
+# otherwise valid.
+# The PEMs live in a password-protected zip so the compromised eMudhra certs
+# don't trip security scanners that cannot tell internal test fixtures from
+# production secrets and flag any certificate or private key they find.  It is
+# encrypted, not merely zipped, because such scanners read inside plain archives.
+# The password is fixed, public, and not a secret; it only keeps the archive
+# from storing the PEMs in the clear.
+DISTRUSTED_SPKI_ZIP = data_file("distrusted.zip")
+DISTRUSTED_SPKI_CHOSEN_KNIGHT = b"Brave Sir Robin"  # not a secret, see comment
+DISTRUSTED_SPKI_HOSTNAME = "localhost"
 
 DHFILE = data_file("ffdh3072.pem")
 BYTES_DHFILE = DHFILE.encode(sys.getfilesystemencoding())
@@ -2278,6 +2293,39 @@ else:
                     s.connect((HOST, server.port))
                     cert = s.getpeercert()
                     self.assertTrue(cert, "Can't get peer certificate.")
+
+        def test_distrusted_spki(self):
+            # gh-160040: the server chain is otherwise valid, but the eMudhra
+            # intermediate's public key is on the _ssl distrusted list, so
+            # verification rejects it.
+            client_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+            client_context.verify_mode = ssl.CERT_REQUIRED
+            client_context.check_hostname = True
+            server_context = ssl.SSLContext(ssl.PROTOCOL_TLS)
+            # the contexts load the PEMs now, so the files are only needed here
+            tmpdir = tempfile.mkdtemp()
+            try:
+                with closing(zipfile.ZipFile(DISTRUSTED_SPKI_ZIP)) as z:
+                    z.extractall(tmpdir, pwd=DISTRUSTED_SPKI_CHOSEN_KNIGHT)
+                certdir = os.path.join(tmpdir, "distrusted")
+                client_context.load_verify_locations(
+                    os.path.join(certdir, "distrusted_root.pem"))
+                server_context.load_cert_chain(
+                    os.path.join(certdir, "distrusted_keycert.pem"))
+            finally:
+                shutil.rmtree(tmpdir)
+
+            server = ThreadedEchoServer(context=server_context, chatty=False)
+            with server:
+                with closing(client_context.wrap_socket(
+                        socket.socket(),
+                        server_hostname=DISTRUSTED_SPKI_HOSTNAME)) as s:
+                    # 2.7 has no SSLCertVerificationError/verify_code; the
+                    # X509_V_ERR_CERT_REJECTED reason only reaches the
+                    # message on OpenSSL 1.1.0+.
+                    with self.assertRaisesRegexp(ssl.SSLError,
+                                                 "certificate verify failed"):
+                        s.connect((HOST, server.port))
 
         def test_check_hostname(self):
             if support.verbose:

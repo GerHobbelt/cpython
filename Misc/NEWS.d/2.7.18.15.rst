@@ -1,0 +1,38 @@
+.. bpo: 0
+.. date: 2026-10-27
+.. nonce: aS$mUd
+.. release date: 2026-10-27
+.. original section: Library
+.. section: Security
+
+Address CVE-2026-115557 (compromised eMudhra intermediate CA keys) in ssl
+
+The :mod:`ssl` module now rejects TLS certificate chains that contain any of
+a set of compromised eMudhra intermediate CA keys (gh-160040, backported from
+the upstream 3.11 security release). The denylist matches the SHA-256 digest
+of each certificate's SubjectPublicKeyInfo, so it also covers cross-signed
+certificates that reuse a distrusted key. A matching certificate fails
+verification with ``X509_V_ERR_CERT_REJECTED`` ("certificate verify
+failed"). The check runs whenever :attr:`SSLContext.verify_mode` is
+``CERT_OPTIONAL`` or ``CERT_REQUIRED``. This is a last line of defense while
+operating-system and bundled trust stores drop the eMudhra/emSign roots.
+
+.. bpo: 0
+.. date: 2026-10-27
+.. nonce: aS$mUd
+.. release date: 2026-10-27
+.. original section: Library
+.. section: Security
+
+Upgrade the pip and setuptools bundled with ensurepip
+
+:mod:`ensurepip` now bundles pip 20.3.4.post4 and setuptools 44.1.1.post3,
+the ActiveState security releases of the last Python 2.7-compatible pip and
+setuptools lines, in place of pip 19.2.3 and setuptools 41.2.0. pip's
+vendored certifi is 2026.10.23.post1, ActiveState's Python 2.7 build of
+certifi 2026.10.23, which removes the emSign ECC Root CA - G3, emSign Root
+CA - C1 and emSign ECC Root CA - C3 roots; emSign Root CA - G1 is the only
+emSign root left. pip's connections go through the :mod:`ssl` module, so the
+eMudhra SPKI denylist above also applies to them (CVE-2026-115557).
+setuptools 44.1.1.post3 includes the fixes for CVE-2022-40897,
+CVE-2024-6345, CVE-2025-47273 and CVE-2026-59890.

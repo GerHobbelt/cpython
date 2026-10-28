@@ -68,6 +68,7 @@
 /* Include OpenSSL header files */
 #include "openssl/rsa.h"
 #include "openssl/crypto.h"
+#include "openssl/evp.h"
 #include "openssl/x509.h"
 #include "openssl/x509v3.h"
 #include "openssl/pem.h"
@@ -2600,11 +2601,79 @@ get_verify_mode(PySSLContext *self, void *c)
     return NULL;
 }
 
+#include "_ssl_distrusted_spki.h"
+
+/* Returns 1 if the SHA-256 of the cert's SPKI is on the distrusted list,
+   0 if not (okay), -1 on an internal error. */
+static int
+_cert_has_distrusted_spki(X509 *cert)
+{
+    unsigned char *spki = NULL;
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int digest_len = 0;
+    int spki_len, ok;
+    size_t i;
+
+    spki_len = i2d_X509_PUBKEY(X509_get_X509_PUBKEY(cert), &spki);
+    if (spki_len <= 0 || spki == NULL) {
+        return -1;
+    }
+
+    ok = EVP_Digest(spki, (size_t)spki_len, digest, &digest_len,
+                    EVP_sha256(), NULL);
+    OPENSSL_free(spki);
+    assert(sizeof(_distrusted_spki[0]) == SHA256_DIGEST_LENGTH);
+    if (!ok
+        || digest_len != SHA256_DIGEST_LENGTH
+        || sizeof(_distrusted_spki[0]) != SHA256_DIGEST_LENGTH) {
+        return -1;
+    }
+
+    for (i = 0; i < sizeof(_distrusted_spki) / sizeof(_distrusted_spki[0]); i++) {
+        if (memcmp(digest, _distrusted_spki[i], SHA256_DIGEST_LENGTH) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Verify callback, called once per cert. Reject distrusted SPKIs. */
+static int
+_ssl_verify_callback(int preverify_ok, X509_STORE_CTX *x509_ctx)
+{
+    X509 *cert;
+
+    /* Don't override an error OpenSSL already reported for this certificate. */
+    if (!preverify_ok) {
+        return preverify_ok;
+    }
+    cert = X509_STORE_CTX_get_current_cert(x509_ctx);
+    if (cert == NULL) {
+        return preverify_ok;
+    }
+    switch (_cert_has_distrusted_spki(cert)) {
+    case 0:
+        /* okay: not on the distrusted list */
+        return preverify_ok;
+    case 1:
+        /* rejected: public key is on the distrusted list */
+        X509_STORE_CTX_set_error(x509_ctx, X509_V_ERR_CERT_REJECTED);
+        return 0;
+    default:
+        /* internal error */
+#ifdef X509_V_ERR_UNSPECIFIED
+        X509_STORE_CTX_set_error(x509_ctx, X509_V_ERR_UNSPECIFIED);
+#else
+        X509_STORE_CTX_set_error(x509_ctx, X509_V_ERR_APPLICATION_VERIFICATION);
+#endif
+        return 0;
+    }
+}
+
 static int
 set_verify_mode(PySSLContext *self, PyObject *arg, void *c)
 {
     int n, mode;
-    int (*verify_cb)(int, X509_STORE_CTX *) = NULL;
 
     if (!PyArg_Parse(arg, "i", &n))
         return -1;
@@ -2630,9 +2699,7 @@ set_verify_mode(PySSLContext *self, PyObject *arg, void *c)
   /* bpo-37428: newPySSLSocket() sets SSL_VERIFY_POST_HANDSHAKE flag for
      * server sockets and SSL_set_post_handshake_auth() for client. */
 
-    /* keep current verify cb */
-    verify_cb = SSL_CTX_get_verify_callback(self->ctx);
-    SSL_CTX_set_verify(self->ctx, mode, verify_cb);
+    SSL_CTX_set_verify(self->ctx, mode, _ssl_verify_callback);
     return 0;
 }
 
