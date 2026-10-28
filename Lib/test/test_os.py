@@ -509,8 +509,20 @@ class MakedirTests (unittest.TestCase):
                             'dir5', 'dir6')
         os.makedirs(path)
 
-
-
+    @unittest.skipUnless(os.name == 'nt', "requires Windows")
+    def test_win32_mkdir_700(self):
+        # gh-118486 (CVE-2024-4030): mode 0700 gets an ACL that only allows
+        # SYSTEM, Administrators and the owner.
+        path = os.path.abspath(os.path.join(test_support.TESTFN, 'dir'))
+        os.mkdir(path, 0700)
+        try:
+            out = subprocess.check_output(["cacls.exe", path, "/s"])
+        finally:
+            os.rmdir(path)
+        self.assertEqual(
+            out.strip(),
+            '%s "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;OW)"' % path,
+        )
 
     def tearDown(self):
         path = os.path.join(test_support.TESTFN, 'dir1', 'dir2', 'dir3',
