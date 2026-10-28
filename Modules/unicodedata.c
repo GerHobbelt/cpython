@@ -493,6 +493,56 @@ get_decomp_record(PyObject *self, Py_UCS4 code, int *index, int *prefix, int *co
 #define NCount  (VCount*TCount)
 #define SCount  (LCount*NCount)
 
+/* Small combining runs are usually cheaper with insertion sort. */
+#define CANONICAL_ORDERING_COUNTING_SORT_THRESHOLD 20
+
+static void
+canonical_ordering_sort_insertion(Py_UNICODE *start, Py_UNICODE *end)
+{
+    Py_UNICODE *i, *j;
+
+    for (i = start + 1; i < end; i++) {
+        Py_UNICODE code = *i;
+        unsigned char combining = _getrecord_ex(code)->combining;
+
+        j = i;
+        while (j > start) {
+            if (_getrecord_ex(j[-1])->combining <= combining)
+                break;
+            *j = j[-1];
+            j--;
+        }
+        if (j != i)
+            *j = code;
+    }
+}
+
+static void
+canonical_ordering_sort_counting(Py_UNICODE *start, Py_UNICODE *end,
+                                 Py_UNICODE *sortbuf)
+{
+    Py_ssize_t counts[256];
+    Py_ssize_t total = 0;
+    Py_UNICODE *i;
+    int c;
+
+    memset(counts, 0, sizeof(counts));
+    for (i = start; i < end; i++)
+        counts[_getrecord_ex(*i)->combining]++;
+
+    for (c = 0; c < 256; c++) {
+        Py_ssize_t count = counts[c];
+        counts[c] = total;
+        total += count;
+    }
+
+    /* Reuse counts[] as the next output slot for each CCC; this is a
+       stable sort, as canonical ordering requires. */
+    for (i = start; i < end; i++)
+        sortbuf[counts[_getrecord_ex(*i)->combining]++] = *i;
+    memcpy(start, sortbuf, (end - start) * sizeof(Py_UNICODE));
+}
+
 static PyObject*
 nfd_nfkd(PyObject *self, PyObject *input, int k)
 {
@@ -503,6 +553,8 @@ nfd_nfkd(PyObject *self, PyObject *input, int k)
     Py_ssize_t space, isize;
     int index, prefix, count, stackptr;
     unsigned char prev, cur;
+    Py_UNICODE *sortbuf = NULL;
+    Py_ssize_t sortbuflen = 0;
 
     stackptr = 0;
     isize = PyUnicode_GET_SIZE(input);
@@ -581,31 +633,58 @@ nfd_nfkd(PyObject *self, PyObject *input, int k)
     /* Drop overallocation. Cannot fail. */
     PyUnicode_Resize(&result, PyUnicode_GET_SIZE(result) - space);
 
-    /* Sort canonically. */
+    /* Sort each consecutive combining-character run canonically.  The
+       old in-place insertion sort was O(n**2) in the run length
+       (gh-149079, CVE-2026-3276). */
     i = PyUnicode_AS_UNICODE(result);
-    prev = _getrecord_ex(*i)->combining;
     end = i + PyUnicode_GET_SIZE(result);
-    for (i++; i < end; i++) {
-        cur = _getrecord_ex(*i)->combining;
-        if (prev == 0 || cur == 0 || prev <= cur) {
-            prev = cur;
+    while (i < end) {
+        Py_UNICODE *run_start;
+        Py_ssize_t run_length;
+        int needs_sort = 0;
+
+        prev = _getrecord_ex(*i)->combining;
+        if (prev == 0) {
+            i++;
             continue;
         }
-        /* Non-canonical order. Need to switch *i with previous. */
-        o = i - 1;
-        while (1) {
-            Py_UNICODE tmp = o[1];
-            o[1] = o[0];
-            o[0] = tmp;
-            o--;
-            if (o < PyUnicode_AS_UNICODE(result))
+
+        run_start = i++;
+        while (i < end) {
+            cur = _getrecord_ex(*i)->combining;
+            if (cur == 0)
                 break;
-            prev = _getrecord_ex(*o)->combining;
-            if (prev == 0 || prev <= cur)
-                break;
+            if (prev > cur)
+                needs_sort = 1;
+            prev = cur;
+            i++;
         }
-        prev = _getrecord_ex(*i)->combining;
+        if (!needs_sort)
+            continue;
+
+        run_length = i - run_start;
+        if (run_length < CANONICAL_ORDERING_COUNTING_SORT_THRESHOLD) {
+            canonical_ordering_sort_insertion(run_start, i);
+            continue;
+        }
+
+        if (run_length > sortbuflen) {
+            Py_UNICODE *new_sortbuf = NULL;
+            if ((size_t)run_length <= PY_SSIZE_T_MAX / sizeof(Py_UNICODE))
+                new_sortbuf = (Py_UNICODE *)PyMem_Realloc(
+                    sortbuf, run_length * sizeof(Py_UNICODE));
+            if (new_sortbuf == NULL) {
+                PyErr_NoMemory();
+                PyMem_Free(sortbuf);
+                Py_DECREF(result);
+                return NULL;
+            }
+            sortbuf = new_sortbuf;
+            sortbuflen = run_length;
+        }
+        canonical_ordering_sort_counting(run_start, i, sortbuf);
     }
+    PyMem_Free(sortbuf);
     return result;
 }
 
