@@ -102,6 +102,8 @@ typedef struct {
     int mode;
     Py_off_t pos;
     Py_off_t size;
+    int bzerror;                /* Sticky decompression error, see
+                                   Util_CatchBZ2ReadError() */
 #ifdef WITH_THREAD
     PyThread_type_lock lock;
 #endif
@@ -120,6 +122,7 @@ typedef struct {
     PyObject_HEAD
     bz_stream bzs;
     int running;
+    int bzerror;
     PyObject *unused_data;
 #ifdef WITH_THREAD
     PyThread_type_lock lock;
@@ -201,6 +204,29 @@ Util_CatchBZ2Error(int bzerror)
             break;
     }
     return ret;
+}
+
+/* BZ2_bzRead() calls BZ2_bzDecompress() on the same stream every time, and
+   re-entering BZ2_bzDecompress() after an error can write out of bounds
+   (gh-150599, CVE-2026-9669).  A read error therefore makes the file
+   unusable for reading until a backwards seek() reopens the stream. */
+static int
+Util_CatchBZ2ReadError(BZ2FileObject *f, int bzerror)
+{
+    if (bzerror != BZ_OK && bzerror != BZ_STREAM_END)
+        f->bzerror = bzerror;
+    return Util_CatchBZ2Error(bzerror);
+}
+
+static int
+Util_CheckBZ2ReadError(BZ2FileObject *f)
+{
+    if (f->bzerror) {
+        PyErr_SetString(PyExc_ValueError,
+                        "BZ2File is unusable after a previous error");
+        return -1;
+    }
+    return 0;
 }
 
 #if BUFSIZ < 8192
@@ -298,7 +324,7 @@ Util_GetLine(BZ2FileObject *f, int n)
             f->mode = MODE_READ_EOF;
             break;
         } else if (bzerror != BZ_OK) {
-            Util_CatchBZ2Error(bzerror);
+            Util_CatchBZ2ReadError(f, bzerror);
             Py_DECREF(v);
             return NULL;
         }
@@ -437,7 +463,7 @@ Util_ReadAhead(BZ2FileObject *f, int bufsize)
         f->size = f->pos;
         f->mode = MODE_READ_EOF;
     } else if (bzerror != BZ_OK) {
-        Util_CatchBZ2Error(bzerror);
+        Util_CatchBZ2ReadError(f, bzerror);
         Util_DropReadAhead(f);
         return -1;
     }
@@ -535,6 +561,9 @@ BZ2File_read(BZ2FileObject *self, PyObject *args)
     if (check_iterbuffered(self))
         goto cleanup;
 
+    if (Util_CheckBZ2ReadError(self))
+        goto cleanup;
+
     if (bytesrequested < 0)
         buffersize = Util_NewBufferSize((size_t)0);
     else
@@ -564,7 +593,7 @@ BZ2File_read(BZ2FileObject *self, PyObject *args)
             self->mode = MODE_READ_EOF;
             break;
         } else if (bzerror != BZ_OK) {
-            Util_CatchBZ2Error(bzerror);
+            Util_CatchBZ2ReadError(self, bzerror);
             Py_DECREF(ret);
             ret = NULL;
             goto cleanup;
@@ -622,6 +651,9 @@ BZ2File_readline(BZ2FileObject *self, PyObject *args)
 
     /* refuse to mix with f.next() */
     if (check_iterbuffered(self))
+        goto cleanup;
+
+    if (Util_CheckBZ2ReadError(self))
         goto cleanup;
 
     if (sizehint == 0)
@@ -685,6 +717,9 @@ BZ2File_readlines(BZ2FileObject *self, PyObject *args)
     if (check_iterbuffered(self))
         goto cleanup;
 
+    if (Util_CheckBZ2ReadError(self))
+        goto cleanup;
+
     if ((list = PyList_New(0)) == NULL)
         goto cleanup;
 
@@ -704,7 +739,7 @@ BZ2File_readlines(BZ2FileObject *self, PyObject *args)
             }
             shortread = 1;
         } else if (bzerror != BZ_OK) {
-            Util_CatchBZ2Error(bzerror);
+            Util_CatchBZ2ReadError(self, bzerror);
           error:
             Py_DECREF(list);
             list = NULL;
@@ -995,6 +1030,41 @@ BZ2File_writelines(BZ2FileObject *self, PyObject *seq)
 #undef CHUNKSIZE
 }
 
+/* Close the read stream and reopen it at the start of the file. */
+static int
+Util_BZ2FileRewind(BZ2FileObject *self)
+{
+    PyObject *ret;
+    int bzerror;
+
+    BZ2_bzReadClose(&bzerror, self->fp);
+    if (self->fp) {
+        PyFile_DecUseCount((PyFileObject *)self->file);
+        self->fp = NULL;
+    }
+    if (bzerror != BZ_OK) {
+        Util_CatchBZ2Error(bzerror);
+        return -1;
+    }
+    ret = PyObject_CallMethod(self->file, "seek", "(i)", 0);
+    if (!ret)
+        return -1;
+    Py_DECREF(ret);
+    self->pos = 0;
+    self->fp = BZ2_bzReadOpen(&bzerror, PyFile_AsFile(self->file),
+                              0, 0, NULL, 0);
+    if (self->fp)
+        PyFile_IncUseCount((PyFileObject *)self->file);
+    if (bzerror != BZ_OK) {
+        Util_CatchBZ2Error(bzerror);
+        return -1;
+    }
+    self->mode = MODE_READ;
+    /* A fresh stream: earlier read errors no longer apply. */
+    self->bzerror = 0;
+    return 0;
+}
+
 PyDoc_STRVAR(BZ2File_seek__doc__,
 "seek(offset [, whence]) -> None\n\
 \n\
@@ -1052,6 +1122,11 @@ BZ2File_seek(BZ2FileObject *self, PyObject *args)
             goto cleanup;
     }
 
+    /* After a read error the stream must not be decompressed again
+       (gh-150599): start over from a freshly opened one. */
+    if (self->bzerror && Util_BZ2FileRewind(self) < 0)
+        goto cleanup;
+
     if (where == 2) {
         if (self->size == -1) {
             assert(self->mode != MODE_READ_EOF);
@@ -1068,7 +1143,7 @@ BZ2File_seek(BZ2FileObject *self, PyObject *args)
                 if (bzerror == BZ_STREAM_END) {
                     break;
                 } else if (bzerror != BZ_OK) {
-                    Util_CatchBZ2Error(bzerror);
+                    Util_CatchBZ2ReadError(self, bzerror);
                     goto cleanup;
                 }
             }
@@ -1089,30 +1164,8 @@ BZ2File_seek(BZ2FileObject *self, PyObject *args)
         offset -= self->pos;
     } else {
         /* we cannot move back, so rewind the stream */
-        BZ2_bzReadClose(&bzerror, self->fp);
-        if (self->fp) {
-            PyFile_DecUseCount((PyFileObject *)self->file);
-            self->fp = NULL;
-        }
-        if (bzerror != BZ_OK) {
-            Util_CatchBZ2Error(bzerror);
+        if (Util_BZ2FileRewind(self) < 0)
             goto cleanup;
-        }
-        ret = PyObject_CallMethod(self->file, "seek", "(i)", 0);
-        if (!ret)
-            goto cleanup;
-        Py_DECREF(ret);
-        ret = NULL;
-        self->pos = 0;
-        self->fp = BZ2_bzReadOpen(&bzerror, PyFile_AsFile(self->file),
-                                  0, 0, NULL, 0);
-        if (self->fp)
-            PyFile_IncUseCount((PyFileObject *)self->file);
-        if (bzerror != BZ_OK) {
-            Util_CatchBZ2Error(bzerror);
-            goto cleanup;
-        }
-        self->mode = MODE_READ;
     }
 
     if (offset <= 0 || self->mode == MODE_READ_EOF)
@@ -1139,7 +1192,7 @@ BZ2File_seek(BZ2FileObject *self, PyObject *args)
             self->mode = MODE_READ_EOF;
             break;
         } else if (bzerror != BZ_OK) {
-            Util_CatchBZ2Error(bzerror);
+            Util_CatchBZ2ReadError(self, bzerror);
             goto cleanup;
         }
         if (bytesread == offset)
@@ -1391,6 +1444,7 @@ BZ2File_init(BZ2FileObject *self, PyObject *args, PyObject *kwargs)
     int mode_char = 0;
 
     self->size = -1;
+    self->bzerror = 0;
 
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|sii:BZ2File",
                                      kwlist, &name, &mode, &buffering,
@@ -1530,6 +1584,10 @@ BZ2File_iternext(BZ2FileObject *self)
         RELEASE_LOCK(self);
         PyErr_SetString(PyExc_ValueError,
                         "I/O operation on closed file");
+        return NULL;
+    }
+    if (self->mode == MODE_READ && Util_CheckBZ2ReadError(self)) {
+        RELEASE_LOCK(self);
         return NULL;
     }
     ret = Util_ReadAheadGetLineSkip(self, 0, READAHEAD_BUFSIZE);
@@ -1942,6 +2000,13 @@ BZ2Decomp_decompress(BZ2DecompObject *self, PyObject *args)
                                         "already found");
         goto error;
     }
+    if (self->bzerror) {
+        /* Re-entering BZ2_bzDecompress() after an error can write out of
+           bounds. */
+        PyErr_SetString(PyExc_ValueError,
+                        "Decompressor is unusable after a previous error");
+        goto error;
+    }
 
     ret = PyString_FromStringAndSize(NULL, SMALLCHUNK);
     if (!ret)
@@ -1975,6 +2040,7 @@ BZ2Decomp_decompress(BZ2DecompObject *self, PyObject *args)
             break;
         }
         if (bzerror != BZ_OK) {
+            self->bzerror = bzerror;
             Util_CatchBZ2Error(bzerror);
             goto error;
         }
@@ -1989,6 +2055,8 @@ BZ2Decomp_decompress(BZ2DecompObject *self, PyObject *args)
             if (buffer_left == 0) {
                 if (Util_GrowBuffer(&ret) < 0) {
                     BZ2_bzDecompressEnd(bzs);
+                    /* The stream state is freed: don't reuse it. */
+                    self->bzerror = BZ_MEM_ERROR;
                     goto error;
                 }
                 bzs->next_out = BUF(ret) + output_size;
@@ -2050,6 +2118,7 @@ BZ2Decomp_init(BZ2DecompObject *self, PyObject *args, PyObject *kwargs)
     }
 
     self->running = 1;
+    self->bzerror = 0;
 
     return 0;
 
