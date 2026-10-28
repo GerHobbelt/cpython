@@ -592,6 +592,22 @@ class StreamReadTest(CommonReadTest):
         f = self.tar.extractfile(tarinfos[0]) # read the first member
         self.assertRaises(tarfile.StreamError, f.read)
 
+    def test_getmembers_big_size(self):
+        # gh-151981: A loop in seek() for streaming files tried to read the
+        # declared number of blocks even at EOF
+        for format in (tarfile.GNU_FORMAT, tarfile.PAX_FORMAT):
+            tinfo = tarfile.TarInfo("huge-file")
+            tinfo.size = 1 << 64
+            bio = io.BytesIO()
+            # Write header without data
+            bio.write(tinfo.tobuf(format))
+
+            # Reset & try to get contents
+            bio.seek(0)
+            with tarfile.open(fileobj=bio, mode="r|") as tar:
+                with self.assertRaises(tarfile.ReadError):
+                    tar.getmembers()
+
     def test_compare_members(self):
         tar1 = tarfile.open(tarname, encoding="iso8859-1")
         try:
