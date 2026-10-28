@@ -622,6 +622,46 @@ class BasicTest(TestCase):
         self.assertEqual(resp.read(), 'Hello\r\n')
         self.assertTrue(resp.isclosed())
 
+    def test_malformed_content_length(self):
+        # RFC 9112: Content-Length = 1*DIGIT.  Values that int() accepts but
+        # the grammar forbids must not be used to frame the body.
+        for value in ('+5', '5_0', '5 0', '0x5'):
+            sock = FakeSocket(
+                'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\nHello\r\n' % value)
+            resp = httplib.HTTPResponse(sock, method="GET")
+            resp.begin()
+            self.assertIsNone(resp.length, value)
+            self.assertEqual(resp.read(), 'Hello\r\n')
+            resp.close()
+
+    def test_content_length_with_whitespace(self):
+        # RFC 9112, section 5.1: optional whitespace (SP / HTAB) around
+        # the field value is not part of the value, so it must not
+        # prevent the Content-Length from being used to frame the body.
+        for value in ('7 ', '7\t', '7 \t ', ' 7 '):
+            sock = FakeSocket(
+                'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n'
+                'Hello\r\nextra' % value)
+            resp = httplib.HTTPResponse(sock, method="GET")
+            resp.begin()
+            self.assertEqual(resp.length, 7, repr(value))
+            self.assertEqual(resp.read(), 'Hello\r\n')
+            self.assertTrue(resp.isclosed())
+            resp.close()
+
+    def test_malformed_chunk_size(self):
+        # RFC 9112: chunk-size = 1*HEXDIG.  Reject sizes that int(_, 16) accepts
+        # but the grammar forbids (a sign, an "0x" prefix or leading
+        # whitespace).
+        start = 'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n'
+        for size in ('-5', '+5', '0x5', ' 5'):
+            sock = FakeSocket(start + '%s\r\nHELLO\r\n0\r\n\r\n' % size)
+            resp = httplib.HTTPResponse(sock, method="GET")
+            resp.begin()
+            self.assertRaises(httplib.IncompleteRead, resp.read)
+            self.assertTrue(resp.isclosed(), size)
+            resp.close()
+
     def test_incomplete_read(self):
         sock = FakeSocket('HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nHello\r\n')
         resp = httplib.HTTPResponse(sock, method="GET")
