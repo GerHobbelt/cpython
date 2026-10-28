@@ -1726,12 +1726,14 @@ ssl
 ensurepip
 ---------
 
-* The bundled ``pip`` is upgraded from 23.0.1 to 26.0.1.post1, the ActiveState
+* The bundled ``pip`` is upgraded from 23.0.1 to 26.0.1.post2, the ActiveState
   security release of pip 26.0.1 (the last pip that supports Python 3.9).
   pip loads its own vendored ``certifi`` CA bundle in addition to the system
-  trust store; the bundle in 26.0.1.post1 (certifi 2026.10.19) drops the
-  compromised eMudhra emSign root, and the release also patches
-  CVE-2026-3219, CVE-2026-6357, CVE-2026-8643 and CVE-2026-13346.
+  trust store; the bundle in 26.0.1.post2 (certifi 2026.10.23) drops the
+  emSign ECC Root CA - G3, emSign Root CA - C1 and emSign ECC Root CA - C3
+  roots of the compromised eMudhra/emSign CA, leaving emSign Root CA - G1 as
+  the only emSign root.  The release also patches CVE-2026-3219,
+  CVE-2026-6357, CVE-2026-8643 and CVE-2026-13346.
 * The bundled ``setuptools`` is upgraded from 79.0.1 to 82.0.1.post1, the
   ActiveState security release of setuptools 82.0.1 (the last setuptools that
   supports Python 3.9), fixing CVE-2026-59890.  setuptools removed
