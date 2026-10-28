@@ -6,8 +6,6 @@ import unittest
 from test import test_support as support
 from test.script_helper import assert_python_ok
 import asyncore
-# import unittest.mock
-from mock import Mock
 from test import support
 import re
 import socket
@@ -3577,8 +3575,8 @@ class TestSSLDebug(unittest.TestCase):
                      "test is not compatible with ignore_environment")
     def test_keylog_env(self):
         self.addCleanup(support.unlink, support.TESTFN)
-        with mock.patch.dict(os.environ):
-            os.environ['SSLKEYLOGFILE'] = support.TESTFN
+        with support.EnvironmentVarGuard() as env:
+            env['SSLKEYLOGFILE'] = support.TESTFN
             self.assertEqual(os.environ['SSLKEYLOGFILE'], support.TESTFN)
 
             ctx = ssl.SSLContext(ssl.PROTOCOL_TLS)

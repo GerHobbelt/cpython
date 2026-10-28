@@ -3472,7 +3472,9 @@ _servername_callback(SSL *s, int *al, void *args)
     Py_INCREF(sni_cb);
 
     if (ssl->ssl_sock == NULL) {
+        /* The error path below releases ssl_socket. */
         ssl_socket = Py_None;
+        Py_INCREF(ssl_socket);
     } else {
         ssl_socket = PyWeakref_GetObject(ssl->ssl_sock);
         Py_INCREF(ssl_socket);

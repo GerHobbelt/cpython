@@ -1836,47 +1836,6 @@ PyDoc_STRVAR(getblocking_doc,
 Returns True if socket is in blocking mode, or False if it\n\
 is in non-blocking mode.");
 
-static int
-socket_parse_timeout(_PyTime_t *timeout, PyObject *timeout_obj)
-{
-#ifdef MS_WINDOWS
-    struct timeval tv;
-#endif
-#ifndef HAVE_POLL
-    _PyTime_t ms;
-#endif
-    int overflow = 0;
-
-    if (timeout_obj == Py_None) {
-        *timeout = _PyTime_FromSeconds(-1);
-        return 0;
-    }
-
-    if (_PyTime_FromSecondsObject(timeout,
-                                  timeout_obj, _PyTime_ROUND_TIMEOUT) < 0)
-        return -1;
-
-    if (*timeout < 0) {
-        PyErr_SetString(PyExc_ValueError, "Timeout value out of range");
-        return -1;
-    }
-
-#ifdef MS_WINDOWS
-    overflow |= (_PyTime_AsTimeval(*timeout, &tv, _PyTime_ROUND_TIMEOUT) < 0);
-#endif
-#ifndef HAVE_POLL
-    ms = _PyTime_AsMilliseconds(*timeout, _PyTime_ROUND_TIMEOUT);
-    overflow |= (ms > INT_MAX);
-#endif
-    if (overflow) {
-        PyErr_SetString(PyExc_OverflowError,
-                        "timeout doesn't fit into C timeval");
-        return -1;
-    }
-
-    return 0;
-}
-
 /* s.settimeout(timeout) method.  Argument:
    None -- no timeout, blocking mode; same as setblocking(True)
    0.0  -- non-blocking mode; same as setblocking(False)

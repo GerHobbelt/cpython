@@ -278,10 +278,13 @@ extern int lstat(const char *, struct stat *);
 #include <malloc.h>
 #include <windows.h>
 #include <shellapi.h>   /* for ShellExecute() */
-#include <sddl.h>       /* for ConvertStringSecurityDescriptorToSecurityDescriptorW() */
 #define popen   _popen
 #define pclose  _pclose
 #endif /* _MSC_VER */
+
+#ifdef MS_WINDOWS
+#include <sddl.h>       /* for ConvertStringSecurityDescriptorToSecurityDescriptorW() */
+#endif
 
 #if defined(PYCC_VACPP) && defined(PYOS_OS2)
 #include <io.h>
